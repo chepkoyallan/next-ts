@@ -1,0 +1,465 @@
+// Extended Revenue System Models
+// Add these models to your main schema.prisma file
+
+// ============================================================================
+// INVOICING AND PAYMENTS
+// ============================================================================
+
+model Invoice {
+  id               String        @id @default(cuid())
+  billingAccountId String        @map("billing_account_id")
+  subscriptionId   String?       @map("subscription_id")
+  invoiceNumber    String        @unique @map("invoice_number")
+  status           InvoiceStatus @default(DRAFT)
+  subtotal         Decimal       @db.Decimal(10, 2)
+  tax              Decimal       @default(0) @db.Decimal(10, 2)
+  total            Decimal       @db.Decimal(10, 2)
+  currency         String        @default("USD")
+  periodStart      DateTime      @map("period_start")
+  periodEnd        DateTime      @map("period_end")
+  dueDate          DateTime      @map("due_date")
+  paidAt           DateTime?     @map("paid_at")
+  lineItems        Json          @default("[]") @map("line_items")
+  metadata         Json          @default("{}")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  subscription   Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  paymentHistory PaymentHistory[]
+
+  @@map("invoices")
+}
+
+model PaymentHistory {
+  id               String        @id @default(cuid())
+  billingAccountId String        @map("billing_account_id")
+  invoiceId        String?       @map("invoice_id")
+  amount           Decimal       @db.Decimal(10, 2)
+  currency         String        @default("USD")
+  status           PaymentStatus
+  paymentMethod    String?       @map("payment_method")
+  transactionId    String?       @map("transaction_id")
+  failureReason    String?       @map("failure_reason")
+  metadata         Json          @default("{}")
+  processedAt      DateTime      @default(now()) @map("processed_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  invoice        Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@map("payment_history")
+}
+
+model BillingAlert {
+  id               String            @id @default(cuid())
+  billingAccountId String            @map("billing_account_id")
+  type             BillingAlertType
+  severity         AlertSeverity
+  message          String
+  threshold        Decimal?          @db.Decimal(15, 6)
+  currentValue     Decimal?          @db.Decimal(15, 6) @map("current_value")
+  isResolved       Boolean           @default(false) @map("is_resolved")
+  resolvedAt       DateTime?         @map("resolved_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+
+  @@map("billing_alerts")
+}
+
+// ============================================================================
+// MARKETPLACE MODELS
+// ============================================================================
+
+model MarketplaceWorkflow {
+  id          String                @id @default(cuid())
+  name        String
+  description String
+  category    WorkflowCategory
+  version     String
+  authorId    String                @map("author_id")
+  pricing     Json
+  tags        String[]              @default([])
+  downloads   Int                   @default(0)
+  rating      Decimal               @default(0) @db.Decimal(3, 2)
+  reviewCount Int                   @default(0) @map("review_count")
+  status      MarketplaceStatus     @default(DRAFT)
+  featured    Boolean               @default(false)
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  specification WorkflowSpecification?
+  purchases     WorkflowPurchase[]
+  reviews       WorkflowReview[]
+  revenue       MarketplaceRevenue[]
+
+  @@map("marketplace_workflows")
+}
+
+model WorkflowSpecification {
+  id           String              @id @default(cuid())
+  workflowId   String              @unique @map("workflow_id")
+  spec         Json
+  documentation Json
+  requirements Json?
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_specifications")
+}
+
+model WorkflowPurchase {
+  id            String         @id @default(cuid())
+  workflowId    String         @map("workflow_id")
+  buyerId       String         @map("buyer_id")
+  projectId     String         @map("project_id")
+  licenseType   LicenseType    @map("license_type")
+  purchasePrice Decimal        @db.Decimal(10, 2) @map("purchase_price")
+  platformFee   Decimal        @db.Decimal(10, 2) @map("platform_fee")
+  sellerRevenue Decimal        @db.Decimal(10, 2) @map("seller_revenue")
+  currency      String         @default("USD")
+  status        PurchaseStatus @default(PENDING)
+  paymentId     String?        @map("payment_id")
+  purchasedAt   DateTime       @default(now()) @map("purchased_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  revenue  MarketplaceRevenue?
+
+  @@map("workflow_purchases")
+}
+
+model WorkflowReview {
+  id           String              @id @default(cuid())
+  workflowId   String              @map("workflow_id")
+  reviewerId   String              @map("reviewer_id")
+  purchaseId   String?             @map("purchase_id")
+  rating       Int
+  title        String?
+  comment      String?
+  isVerified   Boolean             @default(false) @map("is_verified")
+  helpfulCount Int                 @default(0) @map("helpful_count")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  purchase WorkflowPurchase?   @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  @@unique([workflowId, reviewerId])
+  @@map("workflow_reviews")
+}
+
+model MarketplaceRevenue {
+  id            String           @id @default(cuid())
+  purchaseId    String           @unique @map("purchase_id")
+  workflowId    String           @map("workflow_id")
+  sellerId      String           @map("seller_id")
+  grossRevenue  Decimal          @db.Decimal(10, 2) @map("gross_revenue")
+  platformFee   Decimal          @db.Decimal(10, 2) @map("platform_fee")
+  netRevenue    Decimal          @db.Decimal(10, 2) @map("net_revenue")
+  currency      String           @default("USD")
+  feePercentage Decimal          @db.Decimal(5, 2) @map("fee_percentage")
+  payoutStatus  PayoutStatus     @default(PENDING) @map("payout_status")
+  payoutDate    DateTime?        @map("payout_date")
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  purchase WorkflowPurchase    @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("marketplace_revenue")
+}
+
+// ============================================================================
+// FEATURE GATING EXTENDED MODELS
+// ============================================================================
+
+model FeatureAccessLog {
+  id            String      @id @default(cuid())
+  userId        String      @map("user_id")
+  projectId     String      @map("project_id")
+  feature       String
+  accessGranted Boolean     @map("access_granted")
+  reason        String?
+  planTier      PlanTier?   @map("plan_tier")
+  usageCount    Int?        @map("usage_count")
+  usageLimit    Int?        @map("usage_limit")
+  metadata      Json        @default("{}")
+  accessedAt    DateTime    @default(now()) @map("accessed_at")
+
+  // Relations
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@map("feature_access_logs")
+}
+
+model FeatureOverride {
+  id             String              @id @default(cuid())
+  userId         String?             @map("user_id")
+  projectId      String?             @map("project_id")
+  organizationId String?             @map("organization_id")
+  feature        String
+  overrideType   FeatureOverrideType @map("override_type")
+  overrideValue  Json                @map("override_value")
+  reason         String?
+  expiresAt      DateTime?           @map("expires_at")
+  createdBy      String              @map("created_by")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  // Relations
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@map("feature_overrides")
+}
+
+// ============================================================================
+// COMPLIANCE AND GOVERNANCE MODELS
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  projectId  String   @map("project_id")
+  action     String
+  resource   String
+  resourceId String   @map("resource_id")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  timestamp  DateTime @default(now())
+  metadata   Json     @default("{}")
+
+  @@map("audit_logs")
+}
+
+model DataClassification {
+  id                  String   @id @default(cuid())
+  resourceType        String   @map("resource_type")
+  resourceId          String   @map("resource_id")
+  classificationLevel String   @map("classification_level")
+  categories          String[] @default([])
+  piiDetected         Boolean  @default(false) @map("pii_detected")
+  sensitiveFields     String[] @default([]) @map("sensitive_fields")
+  retentionPolicy     String   @default("standard") @map("retention_policy")
+  encrypted           Boolean  @default(false)
+  classifiedBy        String   @map("classified_by")
+  classifiedAt        DateTime @default(now()) @map("classified_at")
+  reviewedAt          DateTime? @map("reviewed_at")
+  metadata            Json     @default("{}")
+
+  @@unique([resourceType, resourceId])
+  @@map("data_classifications")
+}
+
+model GdprRequest {
+  id          String      @id @default(cuid())
+  userId      String      @map("user_id")
+  requestType GdprRequestType @map("request_type")
+  status      GdprRequestStatus @default(PENDING)
+  details     Json
+  responseData Json?      @map("response_data")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  dueDate     DateTime    @map("due_date")
+  completedAt DateTime?   @map("completed_at")
+  completedBy String?     @map("completed_by")
+
+  @@map("gdpr_requests")
+}
+
+// ============================================================================
+// MONITORING AND ALERTING MODELS
+// ============================================================================
+
+model Metric {
+  id          String   @id @default(cuid())
+  name        String
+  type        MetricType
+  value       Decimal  @db.Decimal(15, 6)
+  timestamp   DateTime
+  labels      Json     @default("{}")
+  projectId   String   @map("project_id")
+  executionId String?  @map("execution_id")
+
+  @@map("metrics")
+}
+
+model AlertRule {
+  id            String        @id @default(cuid())
+  name          String
+  query         String
+  condition     Json
+  severity      AlertSeverity
+  duration      Int           // seconds
+  cooldown      Int           @default(300) // seconds
+  enabled       Boolean       @default(true)
+  notifications Json          @default("[]")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  alerts Alert[]
+
+  @@map("alert_rules")
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  ruleId      String        @map("rule_id")
+  name        String
+  description String?
+  severity    AlertSeverity
+  status      AlertStatus   @default(FIRING)
+  projectId   String        @map("project_id")
+  executionId String?       @map("execution_id")
+  triggeredAt DateTime      @default(now()) @map("triggered_at")
+  resolvedAt  DateTime?     @map("resolved_at")
+  metadata    Json          @default("{}")
+
+  // Relations
+  rule AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+// ============================================================================
+// ADDITIONAL ENUMS
+// ============================================================================
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+
+  @@map("invoice_status")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+enum BillingAlertType {
+  USAGE_LIMIT
+  COST_SPIKE
+  PAYMENT_FAILED
+  TRIAL_ENDING
+
+  @@map("billing_alert_type")
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+
+  @@map("alert_severity")
+}
+
+enum WorkflowCategory {
+  DATA_PROCESSING
+  ML_TRAINING
+  ETL
+  MONITORING
+  AUTOMATION
+  ANALYTICS
+
+  @@map("workflow_category")
+}
+
+enum MarketplaceStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+
+  @@map("marketplace_status")
+}
+
+enum LicenseType {
+  SINGLE_USE
+  UNLIMITED
+  TEAM
+  ENTERPRISE
+
+  @@map("license_type")
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  DISPUTED
+
+  @@map("purchase_status")
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+
+  @@map("payout_status")
+}
+
+enum FeatureOverrideType {
+  GRANT
+  DENY
+  LIMIT_INCREASE
+  LIMIT_DECREASE
+
+  @@map("feature_override_type")
+}
+
+enum GdprRequestType {
+  ACCESS
+  RECTIFICATION
+  ERASURE
+  PORTABILITY
+  RESTRICTION
+  OBJECTION
+
+  @@map("gdpr_request_type")
+}
+
+enum GdprRequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  EXPIRED
+
+  @@map("gdpr_request_status")
+}
+
+enum MetricType {
+  COUNTER
+  GAUGE
+  HISTOGRAM
+  SUMMARY
+
+  @@map("metric_type")
+}
+
+enum AlertStatus {
+  FIRING
+  RESOLVED
+  SILENCED
+
+  @@map("alert_status")
+}

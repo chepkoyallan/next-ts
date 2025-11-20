@@ -1,0 +1,13 @@
+{
+  "id": "payment",
+  "name": "Payment",
+  "version": "1.0.0",
+  "description": "Payment processing and integration",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

@@ -1,0 +1,13 @@
+{
+  "id": "invoice",
+  "name": "Invoice",
+  "version": "1.0.0",
+  "description": "Invoice creation and management",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

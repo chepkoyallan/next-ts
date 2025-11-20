@@ -1,0 +1,13 @@
+{
+  "id": "user",
+  "name": "User Management",
+  "version": "1.0.0",
+  "description": "User profiles and management",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

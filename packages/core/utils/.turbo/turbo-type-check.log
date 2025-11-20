@@ -1,0 +1,4 @@
+
+> @app/utils@1.0.0 type-check /Users/allan/Documents/next-ts/packages/core/utils
+> tsc --noEmit
+

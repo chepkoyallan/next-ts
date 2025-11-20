@@ -1,0 +1,8 @@
+{
+  "name": "@features/my-awesome-plugin",
+  "version": "1.0.0",
+  "description": "smaple plugin",
+  "private": true,
+  "main": "index.ts",
+  "types": "types/index.ts"
+}

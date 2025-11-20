@@ -1,0 +1,5 @@
+
+> @app/invoice@1.0.0 type-check /Users/allan/Documents/next-ts/packages/features/invoice
+> tsc --noEmit
+
+ ELIFECYCLE  Command failed.

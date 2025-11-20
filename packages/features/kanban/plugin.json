@@ -1,0 +1,13 @@
+{
+  "id": "kanban",
+  "name": "Kanban Board",
+  "version": "1.0.0",
+  "description": "Task and project management with kanban board",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

@@ -1,0 +1,13 @@
+{
+  "id": "chat",
+  "name": "Chat",
+  "version": "1.0.0",
+  "description": "Real-time messaging and chat functionality",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

@@ -1,0 +1,13 @@
+export { ConfigurationDashboard } from './configuration-dashboard';
+export * from './tabs/general-settings-tab';
+export * from './tabs/feature-flags-tab';
+export * from './tabs/module-management-tab';
+export * from './tabs/ui-theme-tab';
+export * from './tabs/authentication-tab';
+export * from './tabs/branding-tab';
+export * from './tabs/api-settings-tab';
+export * from './tabs/notifications-tab';
+export * from './tabs/localization-tab';
+export * from './tabs/performance-tab';
+export * from './tabs/security-tab';
+export * from './tabs/advanced-tab';

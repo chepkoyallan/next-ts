@@ -1,0 +1,4 @@
+
+> @app/product@1.0.0 type-check /Users/allan/Documents/next-ts/packages/features/product
+> tsc --noEmit
+

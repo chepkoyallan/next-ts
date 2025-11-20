@@ -1,0 +1,15 @@
+
+> @app/auth@1.0.0 type-check /Users/allan/Documents/next-ts/packages/features/auth
+> tsc --noEmit
+
+../../core/types/src/index.ts(6,15): error TS6059: File '/Users/allan/Documents/next-ts/packages/core/types/src/types.ts' is not under 'rootDir' '/Users/allan/Documents/next-ts/packages/features/auth'. 'rootDir' is expected to contain all source files.
+  The file is in the program because:
+    Imported via './types' from file '/Users/allan/Documents/next-ts/packages/core/types/src/index.ts'
+    Imported via './types' from file '/Users/allan/Documents/next-ts/packages/core/types/src/index.ts'
+../../core/types/src/index.ts(6,15): error TS6307: File '/Users/allan/Documents/next-ts/packages/core/types/src/types.ts' is not listed within the file list of project '/Users/allan/Documents/next-ts/packages/features/auth/tsconfig.json'. Projects must list all files or use an 'include' pattern.
+  The file is in the program because:
+    Imported via './types' from file '/Users/allan/Documents/next-ts/packages/core/types/src/index.ts'
+    Imported via './types' from file '/Users/allan/Documents/next-ts/packages/core/types/src/index.ts'
+src/plugin.ts(1,29): error TS6059: File '/Users/allan/Documents/next-ts/packages/core/types/src/index.ts' is not under 'rootDir' '/Users/allan/Documents/next-ts/packages/features/auth'. 'rootDir' is expected to contain all source files.
+src/plugin.ts(1,29): error TS6307: File '/Users/allan/Documents/next-ts/packages/core/types/src/index.ts' is not listed within the file list of project '/Users/allan/Documents/next-ts/packages/features/auth/tsconfig.json'. Projects must list all files or use an 'include' pattern.
+ ELIFECYCLE  Command failed with exit code 2.

@@ -1,0 +1,5 @@
+
+> @app/hooks@1.0.0 type-check /Users/allan/Documents/next-ts/packages/core/hooks
+> tsc --noEmit
+
+ ELIFECYCLE  Command failed.

@@ -1,0 +1,126 @@
+{
+  "id": "analytics-plugin",
+  "name": "Analytics Plugin",
+  "version": "1.0.0",
+  "description": "Example plugin demonstrating registry system, hooks, and manifest configuration",
+  "author": {
+    "name": "Example Team",
+    "email": "team@example.com",
+    "url": "https://example.com"
+  },
+  "license": "MIT",
+  "homepage": "https://example.com/plugins/analytics",
+  "repository": "https://github.com/example/analytics-plugin",
+  "enabled": true,
+  "autoLoad": true,
+  "priority": 10,
+  "dependencies": [],
+  "permissions": {
+    "userData": true,
+    "navigation": true,
+    "routes": true,
+    "components": true,
+    "hooks": true,
+    "custom": ["analytics.track", "analytics.report"]
+  },
+  "routes": [
+    {
+      "id": "analytics-dashboard",
+      "path": "/analytics",
+      "layout": "dashboard",
+      "protected": true,
+      "roles": ["admin", "analyst"],
+      "priority": 5
+    },
+    {
+      "id": "analytics-reports",
+      "path": "/analytics/reports",
+      "layout": "dashboard",
+      "protected": true,
+      "roles": ["admin", "analyst"],
+      "priority": 4
+    }
+  ],
+  "navigation": [
+    {
+      "id": "analytics-nav",
+      "title": "Analytics",
+      "path": "/analytics",
+      "icon": "analytics",
+      "section": "tools",
+      "order": 10,
+      "roles": ["admin", "analyst"]
+    },
+    {
+      "id": "analytics-reports-nav",
+      "title": "Reports",
+      "path": "/analytics/reports",
+      "icon": "report",
+      "section": "tools",
+      "order": 11,
+      "roles": ["admin", "analyst"]
+    }
+  ],
+  "components": [
+    {
+      "id": "analytics-widget",
+      "name": "AnalyticsWidget",
+      "category": "widgets",
+      "tags": ["analytics", "dashboard", "metrics"]
+    },
+    {
+      "id": "analytics-chart",
+      "name": "AnalyticsChart",
+      "category": "charts",
+      "tags": ["analytics", "visualization"]
+    }
+  ],
+  "providers": [
+    {
+      "id": "analytics-provider",
+      "order": 5,
+      "dependencies": []
+    }
+  ],
+  "hooks": [
+    {
+      "name": "analytics.pageview",
+      "description": "Emitted when a page is viewed"
+    },
+    {
+      "name": "analytics.event",
+      "description": "Emitted when an analytics event is tracked"
+    },
+    {
+      "name": "analytics.report.generated",
+      "description": "Emitted when a report is generated"
+    }
+  ],
+  "lifecycle": {
+    "onInit": "initAnalytics",
+    "onLoad": "loadAnalytics",
+    "onUnload": "unloadAnalytics",
+    "onDestroy": "destroyAnalytics"
+  },
+  "features": [
+    "real-time-analytics",
+    "custom-events",
+    "user-tracking",
+    "report-generation"
+  ],
+  "minVersion": "1.0.0",
+  "config": {
+    "trackingId": "UA-XXXXX-Y",
+    "sampleRate": 100,
+    "enableDebug": false,
+    "endpoints": {
+      "track": "/api/analytics/track",
+      "report": "/api/analytics/report"
+    }
+  },
+  "metadata": {
+    "category": "analytics",
+    "tags": ["analytics", "tracking", "reporting"],
+    "featured": true
+  }
+}

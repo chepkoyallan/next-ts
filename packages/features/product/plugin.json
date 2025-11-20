@@ -1,0 +1,13 @@
+{
+  "id": "product",
+  "name": "Product",
+  "version": "1.0.0",
+  "description": "Product catalog and management",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

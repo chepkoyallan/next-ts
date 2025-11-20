@@ -1,0 +1,179 @@
+{
+  "generated": "2025-11-20T03:48:45.163Z",
+  "total": 19,
+  "enabled": 19,
+  "disabled": 0,
+  "plugins": [
+    {
+      "id": "address",
+      "name": "Address",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/address",
+      "manifestPath": "packages/features/address/plugin.json",
+      "indexPath": "packages/features/address/index.ts"
+    },
+    {
+      "id": "auth",
+      "name": "Authentication",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/auth",
+      "manifestPath": "packages/features/auth/plugin.json",
+      "indexPath": "packages/features/auth/index.ts"
+    },
+    {
+      "id": "blog",
+      "name": "Blog",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/blog",
+      "manifestPath": "packages/features/blog/plugin.json",
+      "indexPath": "packages/features/blog/index.ts"
+    },
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/calendar",
+      "manifestPath": "packages/features/calendar/plugin.json",
+      "indexPath": "packages/features/calendar/index.ts"
+    },
+    {
+      "id": "chat",
+      "name": "Chat",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/chat",
+      "manifestPath": "packages/features/chat/plugin.json",
+      "indexPath": "packages/features/chat/index.ts"
+    },
+    {
+      "id": "checkout",
+      "name": "Checkout",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/checkout",
+      "manifestPath": "packages/features/checkout/plugin.json",
+      "indexPath": "packages/features/checkout/index.ts"
+    },
+    {
+      "id": "dashboard",
+      "name": "Dashboard",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/dashboard",
+      "manifestPath": "packages/features/dashboard/plugin.json",
+      "indexPath": "packages/features/dashboard/index.ts"
+    },
+    {
+      "id": "analytics-plugin",
+      "name": "Analytics Plugin",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/example-analytics",
+      "manifestPath": "packages/features/example-analytics/plugin.json",
+      "indexPath": "packages/features/example-analytics/index.ts"
+    },
+    {
+      "id": "file-manager",
+      "name": "File Manager",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/file-manager",
+      "manifestPath": "packages/features/file-manager/plugin.json",
+      "indexPath": "packages/features/file-manager/index.ts"
+    },
+    {
+      "id": "invoice",
+      "name": "Invoice",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/invoice",
+      "manifestPath": "packages/features/invoice/plugin.json",
+      "indexPath": "packages/features/invoice/index.ts"
+    },
+    {
+      "id": "job",
+      "name": "Job Board",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/job",
+      "manifestPath": "packages/features/job/plugin.json",
+      "indexPath": "packages/features/job/index.ts"
+    },
+    {
+      "id": "kanban",
+      "name": "Kanban Board",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/kanban",
+      "manifestPath": "packages/features/kanban/plugin.json",
+      "indexPath": "packages/features/kanban/index.ts"
+    },
+    {
+      "id": "mail",
+      "name": "Mail",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/mail",
+      "manifestPath": "packages/features/mail/plugin.json",
+      "indexPath": "packages/features/mail/index.ts"
+    },
+    {
+      "id": "my-awesome-plugin",
+      "name": "y",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/my-awesome-plugin",
+      "manifestPath": "packages/features/my-awesome-plugin/plugin.json",
+      "indexPath": "packages/features/my-awesome-plugin/index.ts"
+    },
+    {
+      "id": "order",
+      "name": "Order Management",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/order",
+      "manifestPath": "packages/features/order/plugin.json",
+      "indexPath": "packages/features/order/index.ts"
+    },
+    {
+      "id": "payment",
+      "name": "Payment",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/payment",
+      "manifestPath": "packages/features/payment/plugin.json",
+      "indexPath": "packages/features/payment/index.ts"
+    },
+    {
+      "id": "product",
+      "name": "Product",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/product",
+      "manifestPath": "packages/features/product/plugin.json",
+      "indexPath": "packages/features/product/index.ts"
+    },
+    {
+      "id": "tour",
+      "name": "Tour",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/tour",
+      "manifestPath": "packages/features/tour/plugin.json",
+      "indexPath": "packages/features/tour/index.ts"
+    },
+    {
+      "id": "user",
+      "name": "User Management",
+      "version": "1.0.0",
+      "enabled": true,
+      "path": "packages/features/user",
+      "manifestPath": "packages/features/user/plugin.json",
+      "indexPath": "packages/features/user/index.ts"
+    }
+  ]
+}

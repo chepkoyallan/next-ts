@@ -1,0 +1,41 @@
+
+
+> @app/hooks@1.0.0 lint /Users/allan/Documents/next-ts/packages/core/hooks
+> eslint src/
+
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-boolean.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-copy-to-clipboard.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-countdown.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-debounce.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-double-click.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-event-listener.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-local-storage.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-mocked-user.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  'next-ts-monorepo' should be listed in the project's dependencies. Run 'npm i -S next-ts-monorepo' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-off-set-top.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  'framer-motion' should be listed in the project's dependencies. Run 'npm i -S framer-motion' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m  [2m2:1[22m  [31merror[39m  '@types/react' should be listed in the project's dependencies. Run 'npm i -S @types/react' to add it    [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[4m/Users/allan/Documents/next-ts/packages/core/hooks/src/use-responsive.ts[24m[0m
+[0m  [2m1:1[22m  [31merror[39m  '@mui/material' should be listed in the project's dependencies. Run 'npm i -S @mui/material' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m  [2m2:1[22m  [31merror[39m  '@mui/material' should be listed in the project's dependencies. Run 'npm i -S @mui/material' to add it  [2mimport/no-extraneous-dependencies[22m[0m
+[0m[0m
+[0m[31m[1m✖ 12 problems (12 errors, 0 warnings)[22m[39m[0m
+[0m[31m[1m[22m[39m[0m
+[41m[30m ELIFECYCLE [39m[49m [31mCommand failed with exit code 1.[39m

@@ -1,0 +1,13 @@
+{
+  "id": "mail",
+  "name": "Mail",
+  "version": "1.0.0",
+  "description": "Email client and management",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

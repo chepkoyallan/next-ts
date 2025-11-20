@@ -1,0 +1,13 @@
+{
+  "id": "blog",
+  "name": "Blog",
+  "version": "1.0.0",
+  "description": "Blog and content management system",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

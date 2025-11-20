@@ -1,0 +1,13 @@
+{
+  "id": "order",
+  "name": "Order Management",
+  "version": "1.0.0",
+  "description": "Order processing and tracking",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

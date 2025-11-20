@@ -1,0 +1,6 @@
+
+
+> @app/engine@1.0.0 lint /Users/allan/Documents/next-ts/packages/core/engine
+> eslint src/
+
+[41m[30m ELIFECYCLE [39m[49m [31mCommand failed.[39m

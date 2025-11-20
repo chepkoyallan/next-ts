@@ -1,0 +1,19 @@
+{
+  "name": "@app/file-manager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "File management plugin with upload, browser, and preview",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./plugin": "./src/plugin.tsx"
+  },
+  "dependencies": {
+    "@app/components": "workspace:*",
+    "@app/hooks": "workspace:*",
+    "@app/utils": "workspace:*",
+    "@app/config": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}

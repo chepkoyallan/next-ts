@@ -1,0 +1,27 @@
+{
+  "name": "@app/dsl",
+  "version": "1.0.0",
+  "private": true,
+  "description": "DSL (Domain Specific Language) definitions and protocol buffers",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:flyteorg/flyteidl"
+  },
+  "author": "Flyte Bot <admin@flyte.org>",
+  "license": "Apache-2.0",
+  "keywords": [
+    "dsl",
+    "protobuf",
+    "flyte",
+    "grpc"
+  ],
+  "files": [
+    "example",
+    "protos",
+    "gen/pb-js"
+  ],
+  "scripts": {
+    "generate:protos": "./generate_protos.sh",
+    "generate:mocks": "./generate_mocks.sh"
+  }
+}

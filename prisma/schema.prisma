@@ -1,0 +1,2533 @@
+// Revenue System Prisma Schema
+// Complete schema for orchestrator platform revenue system
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // directUrl = env("DIRECT_DATABASE_URL") // Commented out for Accelerate-only usage
+}
+
+// ============================================================================
+// USER MANAGEMENT MODELS
+// ============================================================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  emailVerified Boolean @default(false) @map("email_verified")
+  
+  // Profile fields
+  photoURL     String?  @map("photo_url")
+  phoneNumber  String?  @map("phone_number")
+  country      String?
+  address      String?
+  state        String?
+  city         String?
+  zipCode      String?  @map("zip_code")
+  about        String?
+  isPublic     Boolean  @default(false) @map("is_public")
+  
+  // Social links (JSON field)
+  socialLinks  Json?    @map("social_links")
+  
+  // Notification preferences (JSON field)
+  notificationPreferences Json? @map("notification_preferences")
+  
+  // 2FA fields
+  twoFactorEnabled     Boolean @default(false) @map("two_factor_enabled")
+  twoFactorSecret      String? @map("two_factor_secret")
+  twoFactorBackupCodes Json?   @map("two_factor_backup_codes")
+  
+  // Activity tracking
+  lastLoginAt  DateTime? @map("last_login_at")
+  lastLoginIp  String?   @map("last_login_ip")
+
+  // Legacy fields
+  metadata     Json     @default("{}")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  // Relations
+  userRoles           UserRole[]
+  executionUsage      ExecutionUsage[]
+  featureUsage        FeatureUsage[]
+  featureAccessLogs   FeatureAccessLog[]
+  auditLogs           AuditLog[]
+  gdprRequests        GdprRequest[]
+  workflowReviews     WorkflowReview[]
+  organizationMembers OrganizationMember[]
+  featureFlagOverrides FeatureFlagOverride[]
+  billingAddresses    BillingAddress[]
+
+  @@map("users")
+}
+
+model Organization {
+  id          String              @id @default(cuid())
+  name        String
+  slug        String              @unique
+  description String?
+  logoUrl     String?             @map("logo_url")
+  website     String?
+  industry    String?
+  size        String?             // SMALL, MEDIUM, LARGE, ENTERPRISE
+  status      OrganizationStatus  @default(ACTIVE)
+  ownerId     String?             @map("owner_id")
+
+  // Settings and metadata
+  settings    Json                @default("{}")  // SSO, branding, security policies
+  metadata    Json                @default("{}")
+
+  // Timestamps
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+  deletedAt   DateTime?           @map("deleted_at")
+
+  // Relations
+  billingAccounts      BillingAccount[]
+  projects             Project[]
+  members              OrganizationMember[]
+  invitations          OrganizationInvitation[]
+  formSchemas          FormSchema[]
+  formAssignments      FormAssignment[]
+  formSubmissions      FormSubmission[]
+  featureFlagOverrides FeatureFlagOverride[]
+  connectors           ConnectorConfig[]
+  bmaasInstances       BmaasInstance[]
+  bmaasNetworks        BmaasNetwork[]
+  bmaasVolumes         BmaasVolume[]
+  bmaasBuckets         BmaasBucket[]
+  bmaasUsageRecords    BmaasUsageRecord[]
+  bmaasQuota           BmaasQuota?
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([createdAt])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  userId         String           @map("user_id")
+  role           OrganizationRole @default(MEMBER)
+  invitedBy      String?          @map("invited_by")
+  joinedAt       DateTime         @default(now()) @map("joined_at")
+  leftAt         DateTime?        @map("left_at")
+  isActive       Boolean          @default(true) @map("is_active")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([isActive])
+  @@map("organization_members")
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  email          String
+  role           OrganizationRole @default(MEMBER)
+  token          String           @unique
+  invitedBy      String           @map("invited_by")
+  message        String?
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime         @map("expires_at")
+  acceptedAt     DateTime?        @map("accepted_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([token])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("organization_invitations")
+}
+
+model Project {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  description    String?
+  domain         String   @default("development")
+
+  // Flyte integration fields (optional for backwards compatibility)
+  flyteProjectId String?  @map("flyte_project_id") // Shared Flyte project ID (e.g., "aus") - multiple UI projects map to one Flyte project
+  flyteOrgPrefix String?  @map("flyte_org_prefix")         // The organization prefix used (e.g., "org-abc123")
+  flyteState     Int      @default(0) @map("flyte_state")  // 0=ACTIVE, 1=ARCHIVED, 2=SYSTEM
+  flyteDomains   Json     @default("[]") @map("flyte_domains") // List of domain objects
+  createdBy      String?  @map("created_by")               // User who created this project
+  isArchived     Boolean  @default(false) @map("is_archived")
+
+  settings       Json     @default("{}")
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  // Relations
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions     Subscription[]
+  usageRecords      UsageRecord[]
+  executionUsage    ExecutionUsage[]
+  featureUsage      FeatureUsage[]
+  auditLogs         AuditLog[]
+  metrics           Metric[]
+  alerts            Alert[]
+  workflowPurchases WorkflowPurchase[]
+  workflows         Workflow[]
+  launchPlans       LaunchPlan[]
+  workflowExecutions WorkflowExecution[]
+  bmaasInstances    BmaasInstance[]
+  bmaasNetworks     BmaasNetwork[]
+  bmaasVolumes      BmaasVolume[]
+  bmaasBuckets      BmaasBucket[]
+  bmaasUsageRecords BmaasUsageRecord[]
+
+  // ⚡ Performance indexes
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([flyteOrgPrefix])
+  @@index([isArchived])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([organizationId, isArchived])
+  @@index([createdBy, deletedAt])
+  @@map("projects")
+}
+
+// ============================================================================
+// RBAC MODELS
+// ============================================================================
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String
+  action      String
+  description String
+  conditions  Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model Role {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String
+  hierarchy    Int      @default(0)
+  isSystemRole Boolean  @default(false) @map("is_system_role")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  roleId     String    @map("role_id")
+  assignedBy String    @map("assigned_by")
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  expiresAt  DateTime? @map("expires_at")
+  isActive   Boolean   @default(true) @map("is_active")
+  context    Json      @default("{}")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ============================================================================
+// WORKFLOW ORCHESTRATION MODELS
+// ============================================================================
+
+model Workflow {
+  id              String   @id @default(cuid())
+  projectId       String   @map("project_id")
+  organizationId  String   @map("organization_id")  // For direct org filtering
+  domain          String
+  name            String
+  version         String
+  description     String?
+  spec            Json
+  compiledWorkflow Json?   @map("compiled_workflow")
+  status          WorkflowStatus @default(ACTIVE)
+
+  // Flyte integration fields
+  flyteWorkflowId String   @unique @map("flyte_workflow_id") // Full Flyte ID: "org-abc123-proj:domain:name:version"
+  createdBy       String?  @map("created_by")                // User who created this workflow
+  isDeleted       Boolean  @default(false) @map("is_deleted")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+  launchPlans LaunchPlan[]
+
+  @@unique([projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([isDeleted])
+  @@map("workflows")
+}
+
+model LaunchPlan {
+  id             String   @id @default(cuid())
+  workflowId     String   @map("workflow_id")
+  projectId      String   @map("project_id")
+  organizationId String   @map("organization_id")  // For direct org filtering
+  domain         String
+  name           String
+  version        String
+  spec           Json
+  schedule       Json?
+  status         LaunchPlanStatus @default(ACTIVE)
+
+  // Flyte integration fields
+  flyteLaunchPlanId String   @unique @map("flyte_launch_plan_id") // Full Flyte ID
+  createdBy         String?  @map("created_by")
+  isDeleted         Boolean  @default(false) @map("is_deleted")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions WorkflowExecution[]
+
+  @@unique([projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([isDeleted])
+  @@map("launch_plans")
+}
+
+model WorkflowExecution {
+  id             String   @id @default(cuid())
+  executionId    String   @unique @map("execution_id")
+  workflowId     String?  @map("workflow_id")
+  launchPlanId   String?  @map("launch_plan_id")
+  projectId      String   @map("project_id")
+  organizationId String   @map("organization_id")  // For direct org filtering
+  domain         String
+  name           String
+  phase          ExecutionPhase @default(UNDEFINED)
+  startedAt      DateTime? @map("started_at")
+  duration       Int?      // milliseconds
+  inputs         Json      @default("{}")
+  outputs        Json?
+  error          Json?
+  metadata       Json      @default("{}")
+
+  // Flyte integration fields
+  flyteExecutionId String   @map("flyte_execution_id") // Flyte execution ID
+  createdBy        String?  @map("created_by")         // User who created this execution
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  workflow   Workflow?   @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+  launchPlan LaunchPlan? @relation(fields: [launchPlanId], references: [id], onDelete: SetNull)
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([phase])
+  @@map("workflow_executions")
+}
+
+model Task {
+  id             String   @id @default(cuid())
+  projectId      String   @map("project_id")
+  organizationId String   @map("organization_id")  // For direct org filtering
+  domain         String
+  name           String
+  version        String
+  description    String?
+  spec           Json
+
+  // Flyte integration fields
+  flyteTaskId    String   @unique @map("flyte_task_id") // Full Flyte ID: "org-abc123-proj:domain:name:version"
+  createdBy      String?  @map("created_by")            // User who created this task
+  isDeleted      Boolean  @default(false) @map("is_deleted")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([isDeleted])
+  @@map("tasks")
+}
+
+// ============================================================================
+// BILLING SYSTEM CORE MODELS
+// ============================================================================
+
+model BillingAccount {
+  id                String   @id @default(cuid())
+  organizationId    String   @map("organization_id")
+  name              String
+  email             String
+  status            BillingAccountStatus @default(ACTIVE)
+  paymentMethodId   String?  @map("payment_method_id")
+  billingAddress    Json?    @map("billing_address")
+  taxId             String?  @map("tax_id")
+  currency          String   @default("USD")
+  metadata          Json     @default("{}")
+
+  // Stripe integration fields
+  stripeCustomerId  String?  @unique @map("stripe_customer_id")
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscriptions   Subscription[]
+  invoices        Invoice[]
+  paymentHistory  PaymentHistory[]
+  billingAlerts   BillingAlert[]
+  paymentMethods  PaymentMethod[]
+  billingAddresses BillingAddress[]
+
+  @@map("billing_accounts")
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  tier        PlanTier
+  pricing     Json
+  features    Json
+  limits      Json
+  isActive    Boolean  @default(true) @map("is_active")
+
+  // Stripe integration
+  stripePriceId   String? @unique @map("stripe_price_id")
+  stripeProductId String? @map("stripe_product_id")
+  trialDays       Int?    @map("trial_days")
+  metadata        Json?   @default("{}")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                     String             @id @default(cuid())
+  billingAccountId       String             @map("billing_account_id")
+  projectId              String             @map("project_id")
+  planId                 String             @map("plan_id")
+  status                 SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart     DateTime           @map("current_period_start")
+  currentPeriodEnd       DateTime           @map("current_period_end")
+  trialStart             DateTime?          @map("trial_start")
+  trialEnd               DateTime?          @map("trial_end")
+  cancelAt               DateTime?          @map("cancel_at")
+  canceledAt             DateTime?          @map("canceled_at")
+  metadata               Json               @default("{}")
+
+  // Stripe integration fields
+  stripeSubscriptionId   String?            @unique @map("stripe_subscription_id")
+
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+  usageRecords   UsageRecord[]
+  invoices       Invoice[]
+
+  @@map("subscriptions")
+}
+
+model UsageRecord {
+  id             String   @id @default(cuid())
+  subscriptionId String   @map("subscription_id")
+  projectId      String   @map("project_id")
+  metric         UsageMetric
+  quantity       Decimal  @db.Decimal(15, 6)
+  unit           String
+  timestamp      DateTime
+  metadata       Json     @default("{}")
+  cost           Decimal  @default(0) @db.Decimal(10, 4)
+  currency       String   @default("USD")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("usage_records")
+}
+
+model ExecutionUsage {
+  id            String          @id @default(cuid())
+  executionId   String          @unique @map("execution_id")
+  projectId     String          @map("project_id")
+  workflowId    String          @map("workflow_id")
+  userId        String          @map("user_id")
+  domain        String?
+  startTime     DateTime        @map("start_time")
+  endTime       DateTime?       @map("end_time")
+  duration      Int?            // seconds
+  status        ExecutionStatus
+  resourceUsage Json            @map("resource_usage")
+  cost          Json
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("execution_usage")
+}
+
+// ============================================================================
+// FEATURE GATING MODELS
+// ============================================================================
+
+model FeatureGate {
+  id                  String   @id @default(cuid())
+  feature             String   @unique
+  name                String
+  description         String?
+  requiredPlans       String[] @map("required_plans")
+  requiredPermissions String[] @default([]) @map("required_permissions")
+  usageLimit          Int?     @map("usage_limit")
+  usagePeriod         String   @default("monthly") @map("usage_period")
+  isActive            Boolean  @default(true) @map("is_active")
+  metadata            Json     @default("{}")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  featureUsage      FeatureUsage[]
+  featureAccessLogs FeatureAccessLog[]
+  featureOverrides  FeatureOverride[]
+
+  @@map("feature_gates")
+}
+
+model FeatureUsage {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  projectId   String   @map("project_id")
+  feature     String
+  usageCount  Int      @default(0) @map("usage_count")
+  resetPeriod String   @default("monthly") @map("reset_period")
+  lastUsed    DateTime @default(now()) @map("last_used")
+  lastReset   DateTime @default(now()) @map("last_reset")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@unique([userId, projectId, feature, resetPeriod])
+  @@map("feature_usage")
+}
+
+// ============================================================================
+// CORE ENUMS
+// ============================================================================
+
+enum BillingAccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELINQUENT
+  CLOSED
+
+  @@map("billing_account_status")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  UNPAID
+
+  @@map("subscription_status")
+}
+
+enum PlanTier {
+  FREE
+  BASIC
+  STARTER
+  PROFESSIONAL
+  PREMIUM
+  ENTERPRISE
+
+  @@map("plan_tier")
+}
+
+enum UsageMetric {
+  EXECUTIONS
+  CPU_HOURS
+  MEMORY_GB_HOURS
+  STORAGE_GB
+  NETWORK_GB
+  USERS
+  PROJECTS
+  FORMS
+  FORM_SUBMISSIONS
+  FORM_FIELDS
+  FORM_ASSIGNMENTS
+  CONNECTORS
+  CONNECTOR_CALLS
+  WORKFLOWS
+  WORKFLOW_DRAFTS
+  WORKFLOW_VERSIONS
+  MARKETPLACE_LISTINGS
+  WORKFLOW_PURCHASES
+  ALERTS
+  ALERT_RULES
+  API_KEYS
+  API_CALLS
+  WEBHOOK_ENDPOINTS
+  CUSTOM_ROLES
+  ORGANIZATIONS
+  INVITATIONS
+  COMMENTS
+  TASKS
+  LAUNCH_PLANS
+  SUPPORT_TICKETS
+
+  @@map("usage_metric")
+}
+
+enum ExecutionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ABORTED
+  TIMED_OUT
+
+  @@map("execution_status")
+}
+
+// ============================================================================
+// INVOICING AND PAYMENTS
+// ============================================================================
+
+model Invoice {
+  id               String        @id @default(cuid())
+  billingAccountId String        @map("billing_account_id")
+  subscriptionId   String?       @map("subscription_id")
+  invoiceNumber    String        @unique @map("invoice_number")
+  status           InvoiceStatus @default(DRAFT)
+  subtotal         Decimal       @db.Decimal(10, 2)
+  tax              Decimal       @default(0) @db.Decimal(10, 2)
+  total            Decimal       @db.Decimal(10, 2)
+  currency         String        @default("USD")
+  periodStart      DateTime      @map("period_start")
+  periodEnd        DateTime      @map("period_end")
+  dueDate          DateTime      @map("due_date")
+  paidAt           DateTime?     @map("paid_at")
+  lineItems        Json          @default("[]") @map("line_items")
+  metadata         Json          @default("{}")
+
+  // Stripe integration fields
+  stripeInvoiceId  String?       @unique @map("stripe_invoice_id")
+
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  subscription   Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  paymentHistory PaymentHistory[]
+
+  @@map("invoices")
+}
+
+model PaymentHistory {
+  id               String        @id @default(cuid())
+  billingAccountId String        @map("billing_account_id")
+  invoiceId        String?       @map("invoice_id")
+  amount           Decimal       @db.Decimal(10, 2)
+  currency         String        @default("USD")
+  status           PaymentStatus
+  paymentMethod    String?       @map("payment_method")
+  transactionId    String?       @map("transaction_id")
+  failureReason    String?       @map("failure_reason")
+  metadata         Json          @default("{}")
+  processedAt      DateTime      @default(now()) @map("processed_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  invoice        Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@map("payment_history")
+}
+
+model BillingAlert {
+  id               String            @id @default(cuid())
+  billingAccountId String            @map("billing_account_id")
+  type             BillingAlertType
+  severity         AlertSeverity
+  message          String
+  threshold        Decimal?          @db.Decimal(15, 6)
+  currentValue     Decimal?          @db.Decimal(15, 6) @map("current_value")
+  isResolved       Boolean           @default(false) @map("is_resolved")
+  resolvedAt       DateTime?         @map("resolved_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+
+  @@map("billing_alerts")
+}
+
+model PaymentMethod {
+  id               String   @id @default(cuid())
+  billingAccountId String   @map("billing_account_id")
+  type             String   @default("card") // card, bank_account, etc.
+
+  // Card details (last 4, brand, expiry)
+  brand            String?  // visa, mastercard, amex, etc.
+  last4            String?
+  expiryMonth      Int?     @map("expiry_month")
+  expiryYear       Int?     @map("expiry_year")
+
+  // Status
+  isDefault        Boolean  @default(false) @map("is_default")
+  isExpired        Boolean  @default(false) @map("is_expired")
+
+  // Stripe integration
+  stripePaymentMethodId String? @unique @map("stripe_payment_method_id")
+
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  billingAccount BillingAccount @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+
+  @@map("payment_methods")
+}
+
+model BillingAddress {
+  id               String   @id @default(cuid())
+  billingAccountId String?  @map("billing_account_id")
+  userId           String?  @map("user_id")
+
+  // Address details
+  name             String
+  line1            String
+  line2            String?
+  city             String
+  state            String?
+  postalCode       String   @map("postal_code")
+  country          String
+  phoneNumber      String?  @map("phone_number")
+
+  // Status
+  isDefault        Boolean  @default(false) @map("is_default")
+
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  billingAccount BillingAccount? @relation(fields: [billingAccountId], references: [id], onDelete: Cascade)
+  user           User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("billing_addresses")
+}
+
+// ============================================================================
+// MARKETPLACE MODELS
+// ============================================================================
+
+model MarketplaceWorkflow {
+  id          String                @id @default(cuid())
+  name        String
+  description String
+  category    WorkflowCategory
+  version     String
+  authorId    String                @map("author_id")
+  pricing     Json
+  tags        String[]              @default([])
+  downloads   Int                   @default(0)
+  rating      Decimal               @default(0) @db.Decimal(3, 2)
+  reviewCount Int                   @default(0) @map("review_count")
+  status      MarketplaceStatus     @default(DRAFT)
+  featured    Boolean               @default(false)
+  createdAt   DateTime              @default(now()) @map("created_at")
+  updatedAt   DateTime              @updatedAt @map("updated_at")
+
+  // Relations
+  specification WorkflowSpecification?
+  purchases     WorkflowPurchase[]
+  reviews       WorkflowReview[]
+  revenue       MarketplaceRevenue[]
+
+  @@map("marketplace_workflows")
+}
+
+model WorkflowSpecification {
+  id           String              @id @default(cuid())
+  workflowId   String              @unique @map("workflow_id")
+  spec         Json
+  documentation Json
+  requirements Json?
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_specifications")
+}
+
+model WorkflowPurchase {
+  id            String         @id @default(cuid())
+  workflowId    String         @map("workflow_id")
+  buyerId       String         @map("buyer_id")
+  projectId     String         @map("project_id")
+  licenseType   LicenseType    @map("license_type")
+  purchasePrice Decimal        @db.Decimal(10, 2) @map("purchase_price")
+  platformFee   Decimal        @db.Decimal(10, 2) @map("platform_fee")
+  sellerRevenue Decimal        @db.Decimal(10, 2) @map("seller_revenue")
+  currency      String         @default("USD")
+  status        PurchaseStatus @default(PENDING)
+  paymentId     String?        @map("payment_id")
+  purchasedAt   DateTime       @default(now()) @map("purchased_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revenue  MarketplaceRevenue?
+  reviews  WorkflowReview[]
+
+  @@map("workflow_purchases")
+}
+
+model WorkflowReview {
+  id           String              @id @default(cuid())
+  workflowId   String              @map("workflow_id")
+  reviewerId   String              @map("reviewer_id")
+  purchaseId   String?             @map("purchase_id")
+  rating       Int
+  title        String?
+  comment      String?
+  isVerified   Boolean             @default(false) @map("is_verified")
+  helpfulCount Int                 @default(0) @map("helpful_count")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  // Relations
+  workflow  MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  reviewer  User                @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  purchase  WorkflowPurchase?   @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  @@unique([workflowId, reviewerId])
+  @@map("workflow_reviews")
+}
+
+model MarketplaceRevenue {
+  id            String           @id @default(cuid())
+  purchaseId    String           @unique @map("purchase_id")
+  workflowId    String           @map("workflow_id")
+  sellerId      String           @map("seller_id")
+  grossRevenue  Decimal          @db.Decimal(10, 2) @map("gross_revenue")
+  platformFee   Decimal          @db.Decimal(10, 2) @map("platform_fee")
+  netRevenue    Decimal          @db.Decimal(10, 2) @map("net_revenue")
+  currency      String           @default("USD")
+  feePercentage Decimal          @db.Decimal(5, 2) @map("fee_percentage")
+  payoutStatus  PayoutStatus     @default(PENDING) @map("payout_status")
+  payoutDate    DateTime?        @map("payout_date")
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  purchase WorkflowPurchase    @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("marketplace_revenue")
+}
+
+// ============================================================================
+// FEATURE GATING EXTENDED MODELS
+// ============================================================================
+
+model FeatureAccessLog {
+  id            String      @id @default(cuid())
+  userId        String      @map("user_id")
+  projectId     String      @map("project_id")
+  feature       String
+  accessGranted Boolean     @map("access_granted")
+  reason        String?
+  planTier      PlanTier?   @map("plan_tier")
+  usageCount    Int?        @map("usage_count")
+  usageLimit    Int?        @map("usage_limit")
+  metadata      Json        @default("{}")
+  accessedAt    DateTime    @default(now()) @map("accessed_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@map("feature_access_logs")
+}
+
+model FeatureOverride {
+  id             String              @id @default(cuid())
+  userId         String?             @map("user_id")
+  projectId      String?             @map("project_id")
+  organizationId String?             @map("organization_id")
+  feature        String
+  overrideType   FeatureOverrideType @map("override_type")
+  overrideValue  Json                @map("override_value")
+  reason         String?
+  expiresAt      DateTime?           @map("expires_at")
+  createdBy      String              @map("created_by")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  // Relations
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@map("feature_overrides")
+}
+
+// ============================================================================
+// COMPLIANCE AND GOVERNANCE MODELS
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  projectId  String   @map("project_id")
+  action     String
+  resource   String
+  resourceId String   @map("resource_id")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  timestamp  DateTime @default(now())
+  metadata   Json     @default("{}")
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // ⚡ Performance indexes
+  @@index([userId])
+  @@index([projectId])
+  @@index([timestamp])
+  @@index([action])
+  @@index([resource])
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([projectId, timestamp(sort: Desc)])
+  @@index([action, timestamp(sort: Desc)])
+  @@index([resource, timestamp(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model DataClassification {
+  id                  String   @id @default(cuid())
+  resourceType        String   @map("resource_type")
+  resourceId          String   @map("resource_id")
+  classificationLevel String   @map("classification_level")
+  categories          String[] @default([])
+  piiDetected         Boolean  @default(false) @map("pii_detected")
+  sensitiveFields     String[] @default([]) @map("sensitive_fields")
+  retentionPolicy     String   @default("standard") @map("retention_policy")
+  encrypted           Boolean  @default(false)
+  classifiedBy        String   @map("classified_by")
+  classifiedAt        DateTime @default(now()) @map("classified_at")
+  reviewedAt          DateTime? @map("reviewed_at")
+  metadata            Json     @default("{}")
+
+  @@unique([resourceType, resourceId])
+  @@map("data_classifications")
+}
+
+model GdprRequest {
+  id          String      @id @default(cuid())
+  userId      String      @map("user_id")
+  requestType GdprRequestType @map("request_type")
+  status      GdprRequestStatus @default(PENDING)
+  details     Json
+  responseData Json?      @map("response_data")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  dueDate     DateTime    @map("due_date")
+  completedAt DateTime?   @map("completed_at")
+  completedBy String?     @map("completed_by")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gdpr_requests")
+}
+
+// ============================================================================
+// MONITORING AND ALERTING MODELS
+// ============================================================================
+
+model Metric {
+  id          String   @id @default(cuid())
+  name        String
+  type        MetricType
+  value       Decimal  @db.Decimal(15, 6)
+  timestamp   DateTime
+  labels      Json     @default("{}")
+  projectId   String   @map("project_id")
+  executionId String?  @map("execution_id")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("metrics")
+}
+
+model AlertRule {
+  id            String        @id @default(cuid())
+  name          String
+  query         String
+  condition     Json
+  severity      AlertSeverity
+  duration      Int           // seconds
+  cooldown      Int           @default(300) // seconds
+  enabled       Boolean       @default(true)
+  notifications Json          @default("[]")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  alerts Alert[]
+
+  @@map("alert_rules")
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  ruleId      String        @map("rule_id")
+  name        String
+  description String?
+  severity    AlertSeverity
+  status      AlertStatus   @default(FIRING)
+  projectId   String        @map("project_id")
+  executionId String?       @map("execution_id")
+  triggeredAt DateTime      @default(now()) @map("triggered_at")
+  resolvedAt  DateTime?     @map("resolved_at")
+  metadata    Json          @default("{}")
+
+  // Relations
+  rule    AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+// ============================================================================
+// ADDITIONAL ENUMS
+// ============================================================================
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+
+  @@map("invoice_status")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+enum BillingAlertType {
+  USAGE_LIMIT
+  COST_SPIKE
+  PAYMENT_FAILED
+  TRIAL_ENDING
+
+  @@map("billing_alert_type")
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+
+  @@map("alert_severity")
+}
+
+enum WorkflowCategory {
+  DATA_PROCESSING
+  ML_TRAINING
+  ETL
+  MONITORING
+  AUTOMATION
+  ANALYTICS
+
+  @@map("workflow_category")
+}
+
+enum MarketplaceStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+
+  @@map("marketplace_status")
+}
+
+enum LicenseType {
+  SINGLE_USE
+  UNLIMITED
+  TEAM
+  ENTERPRISE
+
+  @@map("license_type")
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  DISPUTED
+
+  @@map("purchase_status")
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+
+  @@map("payout_status")
+}
+
+enum FeatureOverrideType {
+  GRANT
+  DENY
+  LIMIT_INCREASE
+  LIMIT_DECREASE
+
+  @@map("feature_override_type")
+}
+
+enum GdprRequestType {
+  ACCESS
+  RECTIFICATION
+  ERASURE
+  PORTABILITY
+  RESTRICTION
+  OBJECTION
+
+  @@map("gdpr_request_type")
+}
+
+enum GdprRequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  EXPIRED
+
+  @@map("gdpr_request_status")
+}
+
+enum MetricType {
+  COUNTER
+  GAUGE
+  HISTOGRAM
+  SUMMARY
+
+  @@map("metric_type")
+}
+
+enum AlertStatus {
+  FIRING
+  RESOLVED
+  SILENCED
+
+  @@map("alert_status")
+}
+
+// ============================================================================
+// MISSING ENUMS FOR NEW MODELS
+// ============================================================================
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+
+  @@map("organization_role")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_DELETION
+  DELETED
+
+  @@map("organization_status")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+
+  @@map("invitation_status")
+}
+
+enum WorkflowStatus {
+  ACTIVE
+  ARCHIVED
+  DEPRECATED
+
+  @@map("workflow_status")
+}
+
+enum LaunchPlanStatus {
+  ACTIVE
+  ARCHIVED
+  INACTIVE
+
+  @@map("launch_plan_status")
+}
+
+enum ExecutionPhase {
+  UNDEFINED
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ABORTED
+  TIMED_OUT
+  FAILING
+
+  @@map("execution_phase")
+}
+
+// ============================================================================
+// FORM GENERATION MODELS
+// ============================================================================
+
+model FormSchema {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  version        String   @default("1.0.0")
+  schema         Json     // JSON Schema object
+  uischema       Json?    // UI Schema for layout customization
+  dataSources    Json?    @map("data_sources") // Data source configurations for form fields (EnhancedFormSchema.dataSources)
+  dependencies   Json?    // Field dependencies for dynamic form behavior
+  tags           String[] @default([])
+  category       String   @default("general")
+  organizationId String?  @map("organization_id")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Usage tracking
+  assignmentCount Int       @default(0) @map("assignment_count")
+  lastUsed        DateTime? @map("last_used")
+  popularity      Int       @default(0)
+
+  // Relations
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments  FormAssignment[]
+  tasksAsInput  TaskDefinition[] @relation("TaskInputSchema")
+  tasksAsOutput TaskDefinition[] @relation("TaskOutputSchema")
+
+  @@index([organizationId])
+  @@index([category])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("form_schemas")
+}
+
+model FormAssignment {
+  id             String   @id @default(cuid())
+  schemaId       String   @map("schema_id")
+  organizationId String?  @map("organization_id")
+
+  // Task/Workflow identification (Flyte resource)
+  targetType     String   // 'task' | 'workflow' | 'launchplan'
+  targetProject  String   @map("target_project")
+  targetDomain   String   @map("target_domain")
+  targetName     String   @map("target_name")
+  targetVersion  String   @map("target_version")
+
+  assignmentType String   @map("assignment_type") // input, output, config
+  status         String   @default("active") // active, inactive, draft
+  configuration  Json?
+  name           String?
+  description    String?
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  schema       FormSchema       @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  submissions  FormSubmission[]
+
+  @@unique([targetProject, targetDomain, targetName, targetVersion, assignmentType])
+  @@index([schemaId])
+  @@index([targetType])
+  @@index([status])
+  @@index([organizationId])
+  @@map("form_assignments")
+}
+
+model FormSubmission {
+  id             String    @id @default(cuid())
+  assignmentId   String    @map("assignment_id")
+  organizationId String?   @map("organization_id")
+  data           Json      // Form data
+  isValid        Boolean   @map("is_valid")
+  errors         Json      // Validation errors array
+  submittedBy    String?   @map("submitted_by")
+  submittedAt    DateTime? @map("submitted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Analytics fields
+  completionTime Int?    @map("completion_time") // seconds to complete form
+  status         String  @default("success") // success, failed, abandoned
+  schemaId       String? @map("schema_id") // denormalized for analytics
+  taskId         String? @map("task_id") // denormalized for analytics
+
+  // Relations
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignment   FormAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+  @@index([isValid])
+  @@index([submittedBy])
+  @@index([createdAt])
+  @@index([status])
+  @@index([schemaId])
+  @@index([organizationId])
+  @@map("form_submissions")
+}
+
+// ============================================================================
+// WORKFLOW BUILDER MODELS
+// ============================================================================
+
+model WorkflowDraft {
+  id             String   @id @default(cuid())
+  organizationId String?  @map("organization_id")  // Multi-tenancy (nullable for backwards compatibility)
+  name           String
+  description    String?
+
+  // Flyte project/domain
+  project     String
+  domain      String
+  version     String
+
+  // Workflow definition (serialized)
+  nodes            Json     // WorkflowBuilderNode[]
+  edges            Json     // WorkflowBuilderEdge[]
+  workflowInputs   Json?    @map("workflow_inputs")   // Workflow input parameters
+  workflowOutputs  Json?    @map("workflow_outputs")  // Workflow output parameters
+  metadata         Json?    // Additional metadata (tags, author, etc.)
+
+  // Status
+  status      String   @default("draft")  // 'draft' | 'deployed' | 'archived'
+
+  // Metadata
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Deployment info (if deployed)
+  deployedAt  DateTime? @map("deployed_at")
+  deployedBy  String?   @map("deployed_by")
+  workflowId  String?   @map("workflow_id")  // Flyte workflow ID
+
+  @@unique([name, project, domain, version, organizationId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("workflow_drafts")
+}
+
+// ============================================================================
+// CONNECTOR MODELS
+// ============================================================================
+
+model ConnectorConfig {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+
+  // Multi-tenancy
+  organizationId  String   @map("organization_id")
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Connector type
+  type            String   // 'rest_api' | 'database' | 'cloud_storage' | 'flyte_workflow' | 'graphql' | 'webhook' | 'custom'
+
+  // Configuration (JSON)
+  configuration   Json     // Type-specific config (RestApiConnectorConfig, DatabaseConnectorConfig, etc.)
+  authentication  Json?    // Encrypted auth credentials (AuthenticationConfig)
+  schema          Json?    // Expected output schema (JSONSchema7)
+  dataMapping     Json?    @map("data_mapping")  // Data mapping configuration (DataMapping)
+
+  // Behavior configuration
+  caching         Json?    // Cache configuration (CacheConfig)
+  rateLimit       Json?    @map("rate_limit")  // Rate limiting configuration (RateLimitConfig)
+  healthCheckConfig Json? @map("health_check_config")  // Health check configuration (HealthCheckConfig)
+
+  // Health status
+  status          String   @default("active")  // 'active' | 'inactive' | 'error' | 'testing'
+  lastHealthCheck DateTime? @map("last_health_check")
+  healthStatus    String?   @map("health_status")  // 'healthy' | 'unhealthy' | 'unknown' | 'degraded'
+
+  // Statistics
+  totalExecutions      Int @default(0) @map("total_executions")
+  successfulExecutions Int @default(0) @map("successful_executions")
+  failedExecutions     Int @default(0) @map("failed_executions")
+  averageResponseTime  Float? @map("average_response_time")  // in milliseconds
+
+  // Auto-matching metadata for form field enrichment
+  tags            String[] @default([])  // Tags for automatic field matching (e.g., ["customers", "crm"])
+  category        String?                // Category for organization (e.g., "crm", "inventory", "hr")
+
+  // Metadata
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  auditLogs       ConnectorAuditLog[]
+
+  @@index([type])
+  @@index([status])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([healthStatus])
+  @@index([category])
+  @@index([organizationId, createdAt(sort: Desc)]) // ⚡ Composite index for list queries
+  @@index([organizationId, type, status]) // ⚡ Composite index for filtered list queries
+  @@map("connector_configs")
+}
+
+// ============================================================================
+// CONNECTOR AUDIT LOG
+// ============================================================================
+
+model ConnectorAuditLog {
+  id             String   @id @default(cuid())
+  connectorId    String   @map("connector_id")
+  connector      ConnectorConfig @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  // Action details
+  action         String   // 'created' | 'updated' | 'deleted' | 'executed' | 'tested' | 'health_check'
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+
+  // Execution details
+  queryParams    Json?    @map("query_params")  // ConnectorQueryParams
+  result         Json?    // ExecutionResult summary
+
+  // Change tracking
+  changes        Json?    // Array of { field, oldValue, newValue }
+
+  // Metadata
+  metadata       Json?
+  timestamp      DateTime @default(now())
+
+  @@index([connectorId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("connector_audit_logs")
+}
+
+// ============================================================================
+// TASK DEVELOPMENT MODELS (Pydantic-Enforced Tasks)
+// ============================================================================
+
+model TaskDefinition {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  organizationId  String   @map("organization_id")
+  projectId       String   @map("project_id")
+  domain          String   @default("development")
+
+  // Schema enforcement - Tasks MUST have input/output schemas
+  inputSchemaId   String   @map("input_schema_id")
+  outputSchemaId  String   @map("output_schema_id")
+
+  inputSchema     FormSchema @relation("TaskInputSchema", fields: [inputSchemaId], references: [id])
+  outputSchema    FormSchema @relation("TaskOutputSchema", fields: [outputSchemaId], references: [id])
+
+  // Generated Pydantic models (read-only, auto-generated from schemas)
+  generatedInputModel  String  @map("generated_input_model") @db.Text  // Python code for input Pydantic model
+  generatedOutputModel String  @map("generated_output_model") @db.Text // Python code for output Pydantic model
+
+  // Dynamic function signature (user-defined)
+  functionName    String   @default("process_data") @map("function_name") // e.g., "process_data", "transform", "validate"
+  parameterName   String   @default("input_data") @map("parameter_name")   // e.g., "input_data", "data", "request"
+  inputTypeName   String   @default("InputType") @map("input_type_name")  // e.g., "UserInput", "DataInput" (from schema name)
+  outputTypeName  String   @default("OutputType") @map("output_type_name") // e.g., "UserOutput", "ProcessedData" (from schema name)
+
+  // User's task logic (validated to enforce Pydantic usage)
+  taskCode        String   @db.Text // Complete Python task code (includes models + logic)
+
+  // Dependencies
+  baseImage       String   @default("minimal-python") @map("base_image") // Base image: minimal-python, data-science, ml-gpu
+  extraDependencies Json   @default("[]") @map("extra_dependencies") // Additional pip packages: ["pandas==2.0.0"]
+
+  // Validation status
+  isValid         Boolean  @default(false) @map("is_valid")
+  validationErrors Json?   @map("validation_errors") // Array of validation error messages
+  lastValidated   DateTime? @map("last_validated")
+
+  // Flyte registration
+  flyteTaskId      String?  @unique @map("flyte_task_id") // Full Flyte ID after registration
+  registeredAt     DateTime? @map("registered_at")
+  registrationStatus TaskRegistrationStatus @default(NOT_REGISTERED) @map("registration_status")
+  registrationError String? @map("registration_error") @db.Text
+  version          String   @default("1.0.0")
+
+  // Metadata
+  createdBy       String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([inputSchemaId])
+  @@index([outputSchemaId])
+  @@index([isValid])
+  @@index([createdBy])
+  @@index([flyteTaskId])
+  @@index([registrationStatus])
+  @@map("task_definitions")
+}
+
+enum TaskRegistrationStatus {
+  NOT_REGISTERED
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("task_registration_status")
+}
+
+// ============================================================================
+// AI PROVIDER MODELS (AI-Powered Code Generation)
+// ============================================================================
+
+model AIProviderKey {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+
+  // Provider details
+  provider       String   // "openai", "anthropic", "google", "azure_openai"
+  keyName        String   @map("key_name") // User-friendly name (e.g., "Work Account", "Personal")
+  encryptedKey   String   @map("encrypted_key") @db.Text // AES-256 encrypted API key
+  model          String?  // Preferred model (gpt-4-turbo, claude-3-5-sonnet, etc)
+
+  // Status
+  isDefault      Boolean  @default(false) @map("is_default")
+  isActive       Boolean  @default(true) @map("is_active")
+
+  // Usage tracking
+  usageCount     Int      @default(0) @map("usage_count")
+  lastUsedAt     DateTime? @map("last_used_at")
+  totalCostUsd   Decimal  @default(0) @db.Decimal(10, 4) @map("total_cost_usd")
+
+  // Connection test
+  lastTestedAt   DateTime? @map("last_tested_at")
+  testStatus     String?   @map("test_status") // "success", "failed", "pending"
+  testError      String?   @map("test_error")
+
+  // Metadata
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  generationLogs AIGenerationLog[]
+
+  @@unique([userId, provider, keyName])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([provider])
+  @@index([isDefault])
+  @@index([isActive])
+  @@map("ai_provider_keys")
+}
+
+model AIGenerationLog {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  taskId         String?  @map("task_id") // TaskDefinition ID if generation was for a task
+  providerKeyId  String   @map("provider_key_id")
+
+  // Generation details
+  generationType String   @map("generation_type") // "generate", "explain", "improve", "refactor"
+  provider       String   // "openai", "anthropic", "google", "azure_openai"
+  model          String   // "gpt-4-turbo", "claude-3-5-sonnet", etc
+
+  // Input/Output
+  prompt         String   @db.Text // The full prompt sent to AI
+  userDescription String? @db.Text @map("user_description") // User's original request
+  generatedCode  String   @db.Text @map("generated_code") // AI-generated code
+
+  // Context (what was provided to AI)
+  inputSchema    Json?    @map("input_schema") // Input schema snapshot
+  outputSchema   Json?    @map("output_schema") // Output schema snapshot
+  functionName   String?  @map("function_name") // Function name being generated
+  existingCode   String?  @db.Text @map("existing_code") // If improving existing code
+
+  // Usage metrics
+  tokensUsed     Int      @map("tokens_used")
+  promptTokens   Int?     @map("prompt_tokens")
+  completionTokens Int?   @map("completion_tokens")
+  costUsd        Decimal  @db.Decimal(10, 6) @map("cost_usd")
+  generationTimeMs Int    @map("generation_time_ms") // milliseconds
+
+  // Result status
+  success        Boolean
+  errorMessage   String?  @map("error_message")
+  errorCode      String?  @map("error_code")
+
+  // User feedback (optional)
+  wasAccepted    Boolean? @map("was_accepted") // Did user accept/insert the generated code?
+  userRating     Int?     @map("user_rating") // 1-5 stars
+  userFeedback   String?  @db.Text @map("user_feedback")
+
+  // Metadata
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  providerKey    AIProviderKey @relation(fields: [providerKeyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([taskId])
+  @@index([providerKeyId])
+  @@index([provider])
+  @@index([generationType])
+  @@index([success])
+  @@index([createdAt])
+  @@index([userId, createdAt(sort: Desc)]) // For user's generation history
+  @@index([organizationId, createdAt(sort: Desc)]) // For org analytics
+  @@map("ai_generation_logs")
+}
+
+// ============================================================================
+// USER SETTINGS MODEL
+// ============================================================================
+
+model UserSettings {
+  id        String   @id @default(cuid())
+  userId    String   @unique @map("user_id")
+
+  // General Settings
+  autoSave         Boolean @default(true) @map("auto_save")
+  autoSaveInterval Int     @default(30) @map("auto_save_interval")
+  defaultView      String  @default("grid") @map("default_view") // grid, list, kanban
+  itemsPerPage     Int     @default(20) @map("items_per_page")
+
+  // Theme & Appearance
+  themeMode        String  @default("auto") // light, dark, auto
+  primaryColor     String  @default("#1976d2") @map("primary_color")
+  compactMode      Boolean @default(false) @map("compact_mode")
+  animations       Boolean @default(true)
+
+  // Notifications
+  emailNotifications Boolean @default(true) @map("email_notifications")
+  pushNotifications  Boolean @default(false) @map("push_notifications")
+  notifySchemaCreated Boolean @default(true) @map("notify_schema_created")
+  notifyAssignment    Boolean @default(true) @map("notify_assignment")
+  notifySubmission    Boolean @default(false) @map("notify_submission")
+
+  // Security
+  sessionTimeout      Int     @default(30) @map("session_timeout")
+  requirePasswordChange Boolean @default(false) @map("require_password_change")
+
+  // Editor Preferences
+  editorTheme    String  @default("vs-dark") @map("editor_theme")
+  fontSize       Int     @default(14) @map("font_size")
+  tabSize        Int     @default(2) @map("tab_size")
+  autoComplete   Boolean @default(true) @map("auto_complete")
+  formatOnSave   Boolean @default(true) @map("format_on_save")
+
+  // Advanced Options
+  debugMode            Boolean @default(false) @map("debug_mode")
+  cacheEnabled         Boolean @default(true) @map("cache_enabled")
+  experimentalFeatures Boolean @default(false) @map("experimental_features")
+
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_settings")
+}
+
+// ============================================================================
+// APPLICATION CONFIGURATION MODELS
+// ============================================================================
+
+model AppConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique // e.g., "ui.theme", "features.enableChat"
+  value       Json     // Configuration value (can be any JSON type)
+  category    String   // "ui", "features", "modules", "branding", etc.
+  description String?  // Human-readable description
+  isSystem    Boolean  @default(false) @map("is_system") // System vs user-defined
+  isPublic    Boolean  @default(true) @map("is_public") // Can users override?
+
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([isSystem])
+  @@map("app_config")
+}
+
+model UserConfig {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  key       String   // Configuration key (matches AppConfig.key)
+  value     Json     // User's override value
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+  @@map("user_config")
+}
+
+model OrganizationConfig {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  key            String   // Configuration key (matches AppConfig.key)
+  value          Json     // Organization's override value
+
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@index([key])
+  @@map("organization_config")
+}
+
+model PluginConfig {
+  id             String   @id @default(cuid())
+  pluginId       String   @unique @map("plugin_id") // e.g., "auth", "dashboard"
+  enabled        Boolean  @default(true)
+  config         Json     @default("{}") // Plugin-specific configuration
+  priority       Int      @default(0) // Load order priority
+
+  // Override settings
+  routes         Json?    // Override plugin routes
+  navigation     Json?    // Override plugin navigation
+
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled])
+  @@index([priority])
+  @@map("plugin_config")
+}
+
+// ============================================================================
+// FEATURE FLAG MODELS
+// ============================================================================
+
+enum FeatureFlagType {
+  BOOLEAN
+  PERCENTAGE
+  WHITELIST
+  DATE_RANGE
+  ENVIRONMENT
+}
+
+enum FeatureFlagScope {
+  USER
+  ORGANIZATION
+  ROLE
+  GLOBAL
+}
+
+model FeatureFlag {
+  id          String          @id @default(cuid())
+  key         String          @unique // e.g., "auth.oauth2.enabled"
+  name        String          // Human-readable name
+  description String?         // What this flag controls
+  type        FeatureFlagType // BOOLEAN, PERCENTAGE, etc.
+
+  // Default value (global)
+  enabled Boolean @default(false)
+
+  // Percentage rollout (0-100)
+  rolloutPercentage Int? @default(0) @map("rollout_percentage")
+
+  // Date-based activation
+  enabledFrom  DateTime? @map("enabled_from")
+  enabledUntil DateTime? @map("enabled_until")
+
+  // Environment restrictions
+  environments Json? // ["development", "staging", "production"]
+
+  // Metadata
+  category String? // "auth", "billing", "workflow", etc.
+  tags     Json?   // ["beta", "experimental", "deprecated"]
+
+  // Dependencies
+  dependsOn Json? @map("depends_on") // Other feature flags this depends on
+
+  // Audit
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  createdBy String?   @map("created_by")
+  updatedBy String?   @map("updated_by")
+
+  // Relations
+  overrides FeatureFlagOverride[]
+  auditLogs FeatureFlagAuditLog[]
+
+  @@index([key])
+  @@index([category])
+  @@index([enabled])
+  @@map("feature_flags")
+}
+
+model FeatureFlagOverride {
+  id    String           @id @default(cuid())
+  flagId String          @map("flag_id")
+
+  // Override scope
+  scope FeatureFlagScope // USER, ORGANIZATION, ROLE
+
+  // Target identifiers
+  userId         String? @map("user_id")
+  organizationId String? @map("organization_id")
+  roleId         String? @map("role_id")
+
+  // Override value
+  enabled Boolean
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by")
+
+  // Relations
+  flag         FeatureFlag   @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([flagId, scope, userId, organizationId, roleId])
+  @@index([flagId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([scope])
+  @@map("feature_flag_overrides")
+}
+
+model FeatureFlagAuditLog {
+  id     String @id @default(cuid())
+  flagId String @map("flag_id")
+
+  action String // "created", "updated", "deleted", "checked", "override_added", "override_removed"
+
+  // Change details
+  previousValue Json? @map("previous_value")
+  newValue      Json? @map("new_value")
+
+  // Context
+  userId         String? @map("user_id")
+  organizationId String? @map("organization_id")
+  ipAddress      String? @map("ip_address")
+  userAgent      String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  flag FeatureFlag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+
+  @@index([flagId])
+  @@index([action])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("feature_flag_audit_logs")
+}
+
+// ============================================================================
+// DATA MAPPING TEMPLATE MODELS
+// ============================================================================
+
+model MappingTemplate {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Salesforce Contacts", "HubSpot Companies"
+  description String?
+
+  // Provider/Category
+  provider    String   // e.g., "salesforce", "hubspot", "stripe", "custom"
+  category    String   // e.g., "crm", "payments", "database"
+  service     String?  // Specific service (e.g., "contacts", "companies", "customers")
+
+  // Connector type this template is for
+  connectorType String @map("connector_type") // "rest_api", "graphql", "database", etc.
+
+  // Template configuration
+  rootPath    String?  @map("root_path") // JSONPath for data extraction
+  mappings    Json     // Array of FieldMapping objects
+  valueField  String?  @map("value_field")
+  displayField String? @map("display_field")
+  searchFields Json?   @map("search_fields") // Array of searchable field names
+
+  // Sample data for preview
+  sampleData  Json?    @map("sample_data")
+
+  // Popularity & ratings
+  usageCount  Int      @default(0) @map("usage_count")
+  rating      Decimal  @default(0) @db.Decimal(3, 2)
+  reviewCount Int      @default(0) @map("review_count")
+
+  // Status & visibility
+  status      MappingTemplateStatus @default(ACTIVE)
+  visibility  MappingTemplateVisibility @default(PUBLIC) // PUBLIC, ORGANIZATION, PRIVATE
+
+  // Organization (nullable for system templates)
+  organizationId String? @map("organization_id")
+
+  // Tags for search
+  tags        String[] @default([])
+
+  // Icon/Logo
+  icon        String?  // Emoji or icon name
+  logoUrl     String?  @map("logo_url")
+
+  // Documentation
+  documentation String? @db.Text
+  setupInstructions Json? @map("setup_instructions") // Array of setup steps
+
+  // Metadata
+  isSystemTemplate Boolean @default(false) @map("is_system_template") // Built-in vs user-created
+  isFeatured      Boolean @default(false) @map("is_featured")
+  createdBy       String  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, service, connectorType], name: "provider_service_connector_unique")
+  @@index([provider])
+  @@index([category])
+  @@index([connectorType])
+  @@index([status])
+  @@index([visibility])
+  @@index([organizationId])
+  @@index([isSystemTemplate])
+  @@index([isFeatured])
+  @@index([usageCount])
+  @@index([rating])
+  @@map("mapping_templates")
+}
+
+enum MappingTemplateStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+  DEPRECATED
+
+  @@map("mapping_template_status")
+}
+
+enum MappingTemplateVisibility {
+  PUBLIC      // Available to all
+  ORGANIZATION // Available within organization
+  PRIVATE     // Only creator
+
+  @@map("mapping_template_visibility")
+}
+
+// ============================================================================
+// BARE METAL AS A SERVICE (BMaaS) MODELS
+// ============================================================================
+
+model BmaasInstance {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  projectId      String   @map("project_id")
+
+  // Instance details
+  name           String
+  description    String?
+  flavorId       String   @map("flavor_id")
+
+  // OpenStack identifiers
+  openstackId    String   @unique @map("openstack_id") // Nova instance UUID
+  openstackProjectId String? @map("openstack_project_id") // OpenStack project UUID
+
+  // Configuration
+  imageId        String?  @map("image_id")
+  imageName      String?  @map("image_name")
+  hypervisor     String?  // KVM, XEN, VMWARE_ESXI, IRONIC
+  availabilityZone String? @map("availability_zone")
+
+  // Status
+  status         BmaasInstanceStatus @default(PENDING)
+  powerState     String?  @map("power_state") // RUNNING, PAUSED, SUSPENDED, SHUTOFF
+  taskState      String?  @map("task_state")  // spawning, migrating, etc.
+
+  // Network configuration
+  publicIp       String?  @map("public_ip")
+  privateIp      String?  @map("private_ip")
+  floatingIpId   String?  @map("floating_ip_id")
+
+  // Metadata
+  metadata       Json     @default("{}")
+  tags           String[] @default([])
+
+  // Billing
+  hourlyRate     Decimal  @db.Decimal(10, 4) @map("hourly_rate")
+  currency       String   @default("USD")
+
+  // Lifecycle timestamps
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  // OpenStack lifecycle
+  launchedAt     DateTime? @map("launched_at")
+  terminatedAt   DateTime? @map("terminated_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  flavor         BmaasFlavor @relation(fields: [flavorId], references: [id])
+  volumes        BmaasVolume[]
+  networkPorts   BmaasNetworkPort[]
+  usageRecords   BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([openstackId])
+  @@index([createdAt])
+  @@map("bmaas_instances")
+}
+
+model BmaasFlavor {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+
+  // Compute resources
+  vcpus       Int
+  ram         Int      // MB
+  disk        Int      // GB
+  swap        Int      @default(0) // MB
+  ephemeral   Int      @default(0) // GB
+
+  // OpenStack mapping
+  openstackId String?  @unique @map("openstack_id")
+
+  // Pricing
+  hourlyRate  Decimal  @db.Decimal(10, 4) @map("hourly_rate")
+  monthlyRate Decimal  @db.Decimal(10, 2) @map("monthly_rate")
+  currency    String   @default("USD")
+
+  // Specifications
+  bandwidth   Int?     // Mbps
+  isPublic    Boolean  @default(true) @map("is_public")
+  isActive    Boolean  @default(true) @map("is_active")
+
+  // Metadata
+  metadata    Json     @default("{}")
+  tags        String[] @default([])
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  instances   BmaasInstance[]
+
+  @@index([isActive])
+  @@index([isPublic])
+  @@map("bmaas_flavors")
+}
+
+model BmaasNetwork {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  projectId      String   @map("project_id")
+
+  // Network details
+  name           String
+  description    String?
+
+  // OpenStack identifiers
+  openstackId    String   @unique @map("openstack_id") // Neutron network UUID
+
+  // Configuration
+  cidr           String?
+  gateway        String?
+  dnsNameservers String[] @default([]) @map("dns_nameservers")
+  allocationPools Json?   @map("allocation_pools")
+
+  // Network type
+  networkType    String?  @map("network_type") // flat, vlan, vxlan, gre
+  segmentationId Int?     @map("segmentation_id")
+
+  // Status
+  status         BmaasNetworkStatus @default(PENDING)
+  isPublic       Boolean  @default(false) @map("is_public")
+  isExternal     Boolean  @default(false) @map("is_external")
+
+  // Billing
+  monthlyRate    Decimal  @default(0) @db.Decimal(10, 4) @map("monthly_rate")
+  currency       String   @default("USD")
+
+  // Metadata
+  metadata       Json     @default("{}")
+  tags           String[] @default([])
+
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  subnets        BmaasSubnet[]
+  ports          BmaasNetworkPort[]
+  usageRecords   BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([openstackId])
+  @@map("bmaas_networks")
+}
+
+model BmaasSubnet {
+  id             String   @id @default(cuid())
+  networkId      String   @map("network_id")
+
+  name           String
+  description    String?
+
+  // OpenStack identifiers
+  openstackId    String   @unique @map("openstack_id")
+
+  // Configuration
+  cidr           String
+  gateway        String?
+  ipVersion      Int      @default(4) @map("ip_version") // 4 or 6
+  enableDhcp     Boolean  @default(true) @map("enable_dhcp")
+  dnsNameservers String[] @default([]) @map("dns_nameservers")
+  allocationPools Json    @default("[]") @map("allocation_pools")
+  hostRoutes     Json     @default("[]") @map("host_routes")
+
+  // Metadata
+  metadata       Json     @default("{}")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  network        BmaasNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([networkId])
+  @@index([openstackId])
+  @@map("bmaas_subnets")
+}
+
+model BmaasNetworkPort {
+  id             String   @id @default(cuid())
+  instanceId     String   @map("instance_id")
+  networkId      String   @map("network_id")
+
+  name           String?
+
+  // OpenStack identifiers
+  openstackId    String   @unique @map("openstack_id")
+
+  // Configuration
+  macAddress     String   @map("mac_address")
+  fixedIps       Json     @default("[]") @map("fixed_ips") // Array of {ip_address, subnet_id}
+  securityGroups String[] @default([]) @map("security_groups")
+
+  // Status
+  status         String   @default("DOWN") // UP, DOWN
+  adminStateUp   Boolean  @default(true) @map("admin_state_up")
+
+  // Metadata
+  metadata       Json     @default("{}")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  instance       BmaasInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  network        BmaasNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([networkId])
+  @@index([openstackId])
+  @@map("bmaas_network_ports")
+}
+
+model BmaasVolume {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  projectId      String   @map("project_id")
+  instanceId     String?  @map("instance_id") // Null if not attached
+
+  name           String
+  description    String?
+
+  // OpenStack identifiers
+  openstackId    String   @unique @map("openstack_id") // Cinder volume UUID
+
+  // Configuration
+  sizeGb         Int      @map("size") // Renamed from size for consistency with code
+  volumeType     String   @default("standard") @map("volume_type") // standard, ssd, nvme
+  bootable       Boolean  @default(false)
+  encrypted      Boolean  @default(false)
+
+  // Attachment details
+  attachedDevice String?  @map("device") // Renamed from device for consistency with code
+  attachmentId   String?  @unique @map("attachment_id")
+
+  // Status
+  status         BmaasVolumeStatus @default(CREATING)
+
+  // Billing
+  monthlyRatePerGb Decimal @db.Decimal(10, 4) @map("monthly_rate_per_gb")
+  currency         String  @default("USD")
+
+  // Snapshot info
+  snapshotId     String?  @map("snapshot_id")
+  sourceVolId    String?  @map("source_vol_id")
+
+  // Metadata
+  metadata       Json     @default("{}")
+  tags           String[] @default([])
+
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  attachedAt     DateTime? @map("attached_at")
+  detachedAt     DateTime? @map("detached_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  instance       BmaasInstance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  usageRecords   BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([instanceId])
+  @@index([status])
+  @@index([openstackId])
+  @@map("bmaas_volumes")
+}
+
+model BmaasBucket {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  projectId      String   @map("project_id")
+
+  name           String   // Bucket name (globally unique in Swift)
+  description    String?
+
+  // OpenStack identifiers
+  openstackId    String @unique @map("openstack_container") // Renamed from openstackContainer for consistency
+
+  // Configuration
+  region         String?
+  storageClass   String   @default("standard") @map("storage_class") // standard, archive
+  isPublic       Boolean  @default(false) @map("is_public")
+  versioning     Boolean  @default(false)
+
+  // Capacity tracking
+  objectCount    Int      @default(0) @map("object_count")
+  bytesUsed      BigInt   @default(0) @map("bytes_used")
+  sizeBytes      BigInt   @default(0) @map("size_bytes") // Alias for total bucket size
+
+  // Billing
+  storageRatePerGb Decimal @db.Decimal(10, 4) @map("storage_rate_per_gb")
+  transferRatePerGb Decimal @db.Decimal(10, 4) @map("transfer_rate_per_gb")
+  requestRate      Decimal @default(0) @db.Decimal(10, 6) @map("request_rate")
+  currency         String  @default("USD")
+
+  // Status
+  status         BmaasBucketStatus @default(ACTIVE)
+
+  // Access control
+  readAcl        Json?    @map("read_acl")
+  writeAcl       Json?    @map("write_acl")
+
+  // Metadata
+  metadata       Json     @default("{}")
+  tags           String[] @default([])
+
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+  lastSyncedAt   DateTime? @map("last_synced_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  usageRecords   BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([openstackId])
+  @@map("bmaas_buckets")
+}
+
+model BmaasUsageRecord {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  projectId      String   @map("project_id")
+
+  // Resource identification
+  resourceType   BmaasResourceType @map("resource_type")
+  resourceId     String   @map("resource_id")
+  instanceId     String?  @map("instance_id")
+  volumeId       String?  @map("volume_id")
+  networkId      String?  @map("network_id")
+  bucketId       String?  @map("bucket_id")
+
+  // Usage metrics
+  metric         String   // compute_hours, storage_gb_hours, network_gb_out, requests
+  quantity       Decimal  @db.Decimal(20, 6)
+  unit           String   // hours, GB, requests
+
+  // Pricing
+  unitPrice      Decimal  @db.Decimal(10, 6) @map("unit_price")
+  totalCost      Decimal  @db.Decimal(10, 4) @map("total_cost")
+  currency       String   @default("USD")
+
+  // Time window
+  startTime      DateTime @map("start_time")
+  endTime        DateTime @map("end_time")
+
+  // Metadata
+  metadata       Json     @default("{}")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  instance       BmaasInstance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  volume         BmaasVolume? @relation(fields: [volumeId], references: [id], onDelete: SetNull)
+  network        BmaasNetwork? @relation(fields: [networkId], references: [id], onDelete: SetNull)
+  bucket         BmaasBucket? @relation(fields: [bucketId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([startTime])
+  @@index([endTime])
+  @@index([createdAt])
+  @@index([organizationId, startTime, endTime])
+  @@map("bmaas_usage_records")
+}
+
+model BmaasQuota {
+  id             String   @id @default(cuid())
+  organizationId String   @unique @map("organization_id")
+
+  // Compute quotas
+  maxInstances   Int      @default(10) @map("max_instances")
+  maxVcpus       Int      @default(50) @map("max_vcpus")
+  maxRamMb       Int      @default(131072) @map("max_ram_mb") // 128 GB
+
+  // Storage quotas
+  maxVolumes     Int      @default(20) @map("max_volumes")
+  maxStorageGb   Int      @default(1000) @map("max_volume_gb") // Renamed from maxVolumeGb for consistency
+  maxSnapshots   Int      @default(50) @map("max_snapshots")
+  maxBuckets     Int      @default(10) @map("max_buckets")
+  maxBucketGb    Int      @default(5000) @map("max_bucket_gb")
+
+  // Network quotas
+  maxNetworks    Int      @default(5) @map("max_networks")
+  maxSubnets     Int      @default(10) @map("max_subnets")
+  maxPorts       Int      @default(50) @map("max_ports")
+  maxFloatingIps Int      @default(5) @map("max_floating_ips")
+  maxSecurityGroups Int   @default(10) @map("max_security_groups")
+
+  // Current usage (cached for performance)
+  usedInstances  Int      @default(0) @map("used_instances")
+  usedVcpus      Int      @default(0) @map("used_vcpus")
+  usedRamMb      Int      @default(0) @map("used_ram_mb")
+  usedVolumes    Int      @default(0) @map("used_volumes")
+  usedStorageGb  Int      @default(0) @map("used_volume_gb") // Renamed from usedVolumeGb for consistency
+  usedNetworks   Int      @default(0) @map("used_networks")
+  usedBuckets    Int      @default(0) @map("used_buckets")
+
+  // Metadata
+  metadata       Json     @default("{}")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  lastSyncedAt   DateTime @default(now()) @map("last_synced_at")
+
+  // Relations
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("bmaas_quotas")
+}
+
+// ============================================================================
+// BMaaS ENUMS
+// ============================================================================
+
+enum BmaasInstanceStatus {
+  PENDING
+  BUILDING
+  ACTIVE
+  PAUSED
+  SUSPENDED
+  SHUTOFF
+  ERROR
+  DELETED
+
+  @@map("bmaas_instance_status")
+}
+
+enum BmaasNetworkStatus {
+  PENDING
+  ACTIVE
+  DOWN
+  ERROR
+  DELETED
+
+  @@map("bmaas_network_status")
+}
+
+enum BmaasVolumeStatus {
+  CREATING
+  AVAILABLE
+  ATTACHING
+  IN_USE
+  DETACHING
+  DELETING
+  ERROR
+  ERROR_DELETING
+  DELETED
+
+  @@map("bmaas_volume_status")
+}
+
+enum BmaasBucketStatus {
+  CREATING
+  ACTIVE
+  SUSPENDED
+  DELETING
+  DELETED
+  ERROR
+
+  @@map("bmaas_bucket_status")
+}
+
+enum BmaasResourceType {
+  INSTANCE
+  VOLUME
+  NETWORK
+  BUCKET
+  FLOATING_IP
+  SNAPSHOT
+
+  @@map("bmaas_resource_type")
+}

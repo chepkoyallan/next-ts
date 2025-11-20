@@ -1,0 +1,13 @@
+{
+  "id": "address",
+  "name": "Address",
+  "version": "1.0.0",
+  "description": "Address management system",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

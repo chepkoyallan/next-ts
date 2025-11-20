@@ -1,0 +1,13 @@
+{
+  "id": "tour",
+  "name": "Tour",
+  "version": "1.0.0",
+  "description": "Guided tours and onboarding",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

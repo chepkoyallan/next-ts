@@ -1,0 +1,4 @@
+
+> @app/kanban@1.0.0 type-check /Users/allan/Documents/next-ts/packages/features/kanban
+> tsc --noEmit
+

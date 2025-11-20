@@ -1,0 +1,4 @@
+
+> @app/mail@1.0.0 type-check /Users/allan/Documents/next-ts/packages/features/mail
+> tsc --noEmit
+

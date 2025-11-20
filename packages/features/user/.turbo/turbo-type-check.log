@@ -1,0 +1,5 @@
+
+> @app/user@1.0.0 type-check /Users/allan/Documents/next-ts/packages/features/user
+> tsc --noEmit
+
+ ELIFECYCLE  Command failed.

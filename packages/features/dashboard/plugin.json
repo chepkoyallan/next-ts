@@ -1,0 +1,13 @@
+{
+  "id": "dashboard",
+  "name": "Dashboard",
+  "version": "1.0.0",
+  "description": "Main dashboard and overview analytics",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

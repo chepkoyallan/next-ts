@@ -1,0 +1,13 @@
+{
+  "id": "auth",
+  "name": "Authentication",
+  "version": "1.0.0",
+  "description": "User authentication and session management with multiple providers",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

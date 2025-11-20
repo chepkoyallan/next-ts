@@ -1,0 +1,4 @@
+
+> @app/chat@1.0.0 type-check /Users/allan/Documents/next-ts/packages/features/chat
+> tsc --noEmit
+

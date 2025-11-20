@@ -1,0 +1,13 @@
+{
+  "id": "file-manager",
+  "name": "File Manager",
+  "version": "1.0.0",
+  "description": "File upload and management",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

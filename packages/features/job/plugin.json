@@ -1,0 +1,13 @@
+{
+  "id": "job",
+  "name": "Job Board",
+  "version": "1.0.0",
+  "description": "Job posting and application management",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

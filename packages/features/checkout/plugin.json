@@ -1,0 +1,13 @@
+{
+  "id": "checkout",
+  "name": "Checkout",
+  "version": "1.0.0",
+  "description": "Shopping cart checkout process",
+  "author": "Core Team",
+  "license": "MIT",
+  "enabled": true,
+  "routes": [],
+  "navigation": [],
+  "components": [],
+  "hooks": []
+}

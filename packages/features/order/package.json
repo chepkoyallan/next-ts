@@ -1,0 +1,19 @@
+{
+  "name": "@app/order",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Order management and tracking plugin",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./plugin": "./src/plugin.tsx"
+  },
+  "dependencies": {
+    "@app/components": "workspace:*",
+    "@app/hooks": "workspace:*",
+    "@app/utils": "workspace:*",
+    "@app/config": "workspace:*",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
