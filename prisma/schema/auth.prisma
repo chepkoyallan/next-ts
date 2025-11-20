@@ -1,0 +1,401 @@
+// Authentication, users, roles, and permissions
+// ============================================================================
+
+model User {
+  id            String  @id @default(cuid())
+  email         String  @unique
+  name          String
+  passwordHash  String  @map("password_hash")
+  emailVerified Boolean @default(false) @map("email_verified")
+
+  // Activity tracking
+  lastLoginAt DateTime? @map("last_login_at")
+  lastLoginIp String?   @map("last_login_ip")
+
+  // Timestamps
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations - Auth & Security
+  userRoles            UserRole[]
+  sessions             UserSession[]
+  emailVerifications   EmailVerification[]
+  profile              UserProfile?
+  security             UserSecurity?
+  socialLinks          UserSocialLink[]
+  notificationSettings UserNotificationSettings?
+
+  // Relations - Organizations & Projects
+  ownedOrganizations  Organization[]       @relation("OrganizationOwner")
+  organizationMembers OrganizationMember[]
+  createdProjects     Project[]            @relation("ProjectCreator")
+
+  // Relations - Workflows
+  createdWorkflows       Workflow[]          @relation("WorkflowCreator")
+  createdTasks           Task[]              @relation("TaskCreator")
+  createdLaunchPlans     LaunchPlan[]        @relation("LaunchPlanCreator")
+  initiatedExecutions    WorkflowExecution[] @relation("ExecutionInitiator")
+  createdWorkflowDrafts  WorkflowDraft[]     @relation("WorkflowDraftCreator")
+  deployedWorkflowDrafts WorkflowDraft[]     @relation("WorkflowDraftDeployer")
+
+  // Relations - BMaaS
+  createdBmaasInstances BmaasInstance[] @relation("BmaasInstanceCreator")
+  createdBmaasVolumes   BmaasVolume[]   @relation("BmaasVolumeCreator")
+  createdBmaasNetworks  BmaasNetwork[]  @relation("BmaasNetworkCreator")
+  createdBmaasBuckets   BmaasBucket[]   @relation("BmaasBucketCreator")
+
+  // Relations - Usage & Billing
+  executionUsage   ExecutionUsage[]
+  featureUsage     FeatureUsage[]
+  billingAddresses BillingAddress[]
+
+  // Relations - Features & Audit
+  featureAccessLogs    FeatureAccessLog[]
+  featureFlagOverrides FeatureFlagOverride[]
+  auditLogs            AuditLog[]
+  gdprRequests         GdprRequest[]
+
+  // Relations - Marketplace
+  workflowReviews WorkflowReview[]
+
+  // Relations - Connectors
+  createdConnectors ConnectorConfig[] @relation("ConnectorCreator")
+
+  // Relations - Notifications
+  notifications Notification[]
+
+  // Relations - API Keys
+  apiKeys ApiKey[]
+
+  // Relations - Configuration
+  settings                 UserSettings?
+  userConfigs              UserConfig[]
+  notificationPreferences  NotificationPreference[]
+
+  @@index([email])
+  @@index([emailVerified])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model UserProfile {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  // Profile fields
+  photoURL    String? @map("photo_url")
+  phoneNumber String? @map("phone_number")
+  country     String?
+  address     String?
+  state       String?
+  city        String?
+  zipCode     String? @map("zip_code")
+  about       String?
+  isPublic    Boolean @default(false) @map("is_public")
+
+  // Bio and social
+  bio      String?
+  website  String?
+  company  String?
+  location String?
+  timezone String? @default("UTC")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model UserSocialLink {
+  id       String @id @default(cuid())
+  userId   String @map("user_id")
+  platform String // github, linkedin, twitter, etc.
+  url      String
+  isPublic Boolean @default(true) @map("is_public")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, platform])
+  @@index([userId])
+  @@map("user_social_links")
+}
+
+model UserSecurity {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  // 2FA/MFA
+  twoFactorEnabled Boolean @default(false) @map("two_factor_enabled")
+  twoFactorSecret  String? @map("two_factor_secret")
+
+  // Password security
+  passwordChangedAt          DateTime? @map("password_changed_at")
+  requirePasswordChange      Boolean   @default(false) @map("require_password_change")
+  failedLoginAttempts        Int       @default(0) @map("failed_login_attempts")
+  accountLockedUntil         DateTime? @map("account_locked_until")
+  lastFailedLoginAttempt     DateTime? @map("last_failed_login_attempt")
+  passwordResetAttempts      Int       @default(0) @map("password_reset_attempts")
+  passwordResetLockedUntil   DateTime? @map("password_reset_locked_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  backupCodes        TwoFactorBackupCode[]
+  trustedDevices     TrustedDevice[]
+  securityAuditLogs  SecurityAuditLog[]
+  passwordResetToken PasswordResetToken?
+
+  @@index([userId])
+  @@map("user_security")
+}
+
+model TwoFactorBackupCode {
+  id               String  @id @default(cuid())
+  userSecurityId   String  @map("user_security_id")
+  code             String  @unique
+  isUsed           Boolean @default(false) @map("is_used")
+  usedAt           DateTime? @map("used_at")
+  usedFromIp       String? @map("used_from_ip")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
+
+  @@index([userSecurityId])
+  @@index([code])
+  @@map("two_factor_backup_codes")
+}
+
+model TrustedDevice {
+  id             String @id @default(cuid())
+  userSecurityId String @map("user_security_id")
+
+  deviceFingerprint String   @map("device_fingerprint")
+  deviceName        String?  @map("device_name")
+  userAgent         String
+  ipAddress         String   @map("ip_address")
+  isTrusted         Boolean  @default(false) @map("is_trusted")
+  lastUsedAt        DateTime @default(now()) @map("last_used_at")
+  expiresAt         DateTime @map("expires_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
+
+  @@index([userSecurityId])
+  @@index([deviceFingerprint])
+  @@map("trusted_devices")
+}
+
+model UserSession {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  // Session details
+  token        String   @unique
+  refreshToken String?  @unique @map("refresh_token")
+  ipAddress    String   @map("ip_address")
+  userAgent    String   @map("user_agent")
+  deviceInfo   Json?    @map("device_info")
+
+  // Status
+  isActive       Boolean   @default(true) @map("is_active")
+  lastActivityAt DateTime  @default(now()) @map("last_activity_at")
+  expiresAt      DateTime  @map("expires_at")
+  revokedAt      DateTime? @map("revoked_at")
+  revokedReason  String?   @map("revoked_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isActive])
+  @@index([token])
+  @@index([expiresAt])
+  @@index([isActive, expiresAt])
+  @@map("user_sessions")
+}
+
+model EmailVerification {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  email      String
+  token      String    @unique
+  expiresAt  DateTime  @map("expires_at")
+  verifiedAt DateTime? @map("verified_at")
+  verifiedIp String?   @map("verified_ip")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([email])
+  @@index([expiresAt])
+  @@map("email_verifications")
+}
+
+model PasswordResetToken {
+  id             String @id @default(cuid())
+  userSecurityId String @unique @map("user_security_id")
+
+  token      String    @unique
+  expiresAt  DateTime  @map("expires_at")
+  usedAt     DateTime? @map("used_at")
+  ipAddress  String?   @map("ip_address")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model UserNotificationSettings {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  // Email notifications
+  emailEnabled           Boolean @default(true) @map("email_enabled")
+  emailDigest            Boolean @default(true) @map("email_digest")
+  emailDigestFrequency   String  @default("daily") @map("email_digest_frequency") // daily, weekly, never
+
+  // Product notifications
+  productUpdates      Boolean @default(true) @map("product_updates")
+  securityAlerts      Boolean @default(true) @map("security_alerts")
+  billingAlerts       Boolean @default(true) @map("billing_alerts")
+  workflowNotifications Boolean @default(true) @map("workflow_notifications")
+  marketplaceUpdates  Boolean @default(true) @map("marketplace_updates")
+
+  // In-app notifications
+  inAppEnabled     Boolean @default(true) @map("in_app_enabled")
+  desktopEnabled   Boolean @default(false) @map("desktop_enabled")
+  mobileEnabled    Boolean @default(true) @map("mobile_enabled")
+
+  // Quiet hours
+  quietHoursEnabled Boolean @default(false) @map("quiet_hours_enabled")
+  quietHoursStart   String? @map("quiet_hours_start") // HH:mm format
+  quietHoursEnd     String? @map("quiet_hours_end")
+  quietHoursTimezone String? @map("quiet_hours_timezone")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_notification_settings")
+}
+
+model SecurityAuditLog {
+  id             String @id @default(cuid())
+  userSecurityId String @map("user_security_id")
+
+  action    String // login_success, login_failed, password_changed, 2fa_enabled, etc.
+  ipAddress String @map("ip_address")
+  userAgent String @map("user_agent")
+  metadata  Json   @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
+
+  @@index([userSecurityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("security_audit_logs")
+}
+
+model Role {
+  id           String    @id @default(cuid())
+  name         String    @unique
+  description  String
+  hierarchy    Int       @default(0)
+  isSystemRole Boolean   @default(false) @map("is_system_role")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  // Relations
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@index([deletedAt])
+  @@index([isSystemRole])
+  @@map("roles")
+}
+
+model Permission {
+  id          String    @id @default(cuid())
+  resource    String
+  action      String
+  description String
+  conditions  Json      @default("[]")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@index([deletedAt])
+  @@index([resource])
+  @@map("permissions")
+}
+
+model UserRole {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  roleId     String    @map("role_id")
+  assignedBy String    @map("assigned_by")
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  expiresAt  DateTime? @map("expires_at")
+  isActive   Boolean   @default(true) @map("is_active")
+  context    Json      @default("{}")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+

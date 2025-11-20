@@ -1,0 +1,176 @@
+// External system connectors and integrations
+// ============================================================================
+
+model ConnectorConfig {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Multi-tenancy
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Connector type
+  type String // 'rest_api' | 'database' | 'cloud_storage' | 'flyte_workflow' | 'graphql' | 'webhook' | 'custom'
+
+  // Configuration (JSON)
+  configuration  Json // Type-specific config (RestApiConnectorConfig, DatabaseConnectorConfig, etc.)
+  authentication Json? // Encrypted auth credentials (AuthenticationConfig)
+  schema         Json? // Expected output schema (JSONSchema7)
+  dataMapping    Json? @map("data_mapping") // Data mapping configuration (DataMapping)
+
+  // Behavior configuration
+  caching           Json? // Cache configuration (CacheConfig)
+  rateLimit         Json? @map("rate_limit") // Rate limiting configuration (RateLimitConfig)
+  healthCheckConfig Json? @map("health_check_config") // Health check configuration (HealthCheckConfig)
+
+  // Health status
+  status          String    @default("active") // 'active' | 'inactive' | 'error' | 'testing'
+  lastHealthCheck DateTime? @map("last_health_check")
+  healthStatus    String?   @map("health_status") // 'healthy' | 'unhealthy' | 'unknown' | 'degraded'
+
+  // Statistics
+  totalExecutions      BigInt @default(0) @map("total_executions")
+  successfulExecutions BigInt @default(0) @map("successful_executions")
+  failedExecutions     BigInt @default(0) @map("failed_executions")
+  averageResponseTime  Float? @map("average_response_time") // in milliseconds
+
+  // Auto-matching metadata for form field enrichment
+  tags     String[] @default([]) // Tags for automatic field matching (e.g., ["customers", "crm"])
+  category String? // Category for organization (e.g., "crm", "inventory", "hr")
+
+  // Metadata
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  creator   User                @relation("ConnectorCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  auditLogs ConnectorAuditLog[]
+
+  @@index([type])
+  @@index([status])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([healthStatus])
+  @@index([category])
+  @@index([deletedAt])
+  @@index([organizationId, createdAt(sort: Desc)]) // ⚡ Composite index for list queries
+  @@index([organizationId, type, status]) // ⚡ Composite index for filtered list queries
+  @@map("connector_configs")
+}
+
+model ConnectorAuditLog {
+  id          String          @id @default(cuid())
+  connectorId String          @map("connector_id")
+  connector   ConnectorConfig @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  // Action details
+  action         String // 'created' | 'updated' | 'deleted' | 'executed' | 'tested' | 'health_check'
+  userId         String @map("user_id")
+  organizationId String @map("organization_id")
+
+  // Execution details
+  queryParams Json? @map("query_params") // ConnectorQueryParams
+  result      Json? // ExecutionResult summary
+
+  // Change tracking
+  changes Json? // Array of { field, oldValue, newValue }
+
+  // Metadata
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  @@index([connectorId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("connector_audit_logs")
+}
+
+model MappingTemplate {
+  id          String  @id @default(cuid())
+  name        String // e.g., "Salesforce Contacts", "HubSpot Companies"
+  description String?
+
+  // Provider/Category
+  provider String // e.g., "salesforce", "hubspot", "stripe", "custom"
+  category String // e.g., "crm", "payments", "database"
+  service  String? // Specific service (e.g., "contacts", "companies", "customers")
+
+  // Connector type this template is for
+  connectorType String @map("connector_type") // "rest_api", "graphql", "database", etc.
+
+  // Template configuration
+  rootPath     String? @map("root_path") // JSONPath for data extraction
+  mappings     Json // Array of FieldMapping objects
+  valueField   String? @map("value_field")
+  displayField String? @map("display_field")
+  searchFields Json?   @map("search_fields") // Array of searchable field names
+
+  // Sample data for preview
+  sampleData Json? @map("sample_data")
+
+  // Popularity & ratings
+  usageCount  Int     @default(0) @map("usage_count")
+  rating      Decimal @default(0) @db.Decimal(3, 2)
+  reviewCount Int     @default(0) @map("review_count")
+
+  // Status & visibility
+  status     MappingTemplateStatus     @default(ACTIVE)
+  visibility MappingTemplateVisibility @default(PUBLIC) // PUBLIC, ORGANIZATION, PRIVATE
+
+  // Organization (nullable for system templates)
+  organizationId String? @map("organization_id")
+
+  // Tags for search
+  tags String[] @default([])
+
+  // Icon/Logo
+  icon    String? // Emoji or icon name
+  logoUrl String? @map("logo_url")
+
+  // Documentation
+  documentation     String? @db.Text
+  setupInstructions Json?   @map("setup_instructions") // Array of setup steps
+
+  // Metadata
+  isSystemTemplate Boolean  @default(false) @map("is_system_template") // Built-in vs user-created
+  isFeatured       Boolean  @default(false) @map("is_featured")
+  createdBy        String   @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([provider, service, connectorType], name: "provider_service_connector_unique")
+  @@index([provider])
+  @@index([category])
+  @@index([connectorType])
+  @@index([status])
+  @@index([visibility])
+  @@index([organizationId])
+  @@index([isSystemTemplate])
+  @@index([isFeatured])
+  @@index([usageCount])
+  @@index([rating])
+  @@map("mapping_templates")
+}
+
+enum MappingTemplateStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+  DEPRECATED
+
+  @@map("mapping_template_status")
+}
+
+enum MappingTemplateVisibility {
+  PUBLIC // Available to all
+  ORGANIZATION // Available within organization
+  PRIVATE // Only creator
+
+  @@map("mapping_template_visibility")
+}
+

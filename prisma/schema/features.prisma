@@ -1,0 +1,223 @@
+// Feature gates, flags, and usage tracking
+// ============================================================================
+
+model FeatureGate {
+  id                  String    @id @default(cuid())
+  feature             String    @unique
+  name                String
+  description         String?
+  requiredPlans       String[]  @map("required_plans")
+  requiredPermissions String[]  @default([]) @map("required_permissions")
+  usageLimit          Int?      @map("usage_limit")
+  usagePeriod         String    @default("monthly") @map("usage_period")
+  isActive            Boolean   @default(true) @map("is_active")
+  metadata            Json      @default("{}")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  deletedAt           DateTime? @map("deleted_at")
+
+  // Relations
+  featureUsage      FeatureUsage[]
+  featureAccessLogs FeatureAccessLog[]
+  featureOverrides  FeatureOverride[]
+
+  @@index([feature])
+  @@index([isActive])
+  @@index([deletedAt])
+  @@map("feature_gates")
+}
+
+model FeatureUsage {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  projectId      String   @map("project_id")
+  organizationId String   @map("organization_id")
+  feature        String
+  usageCount     BigInt   @default(0) @map("usage_count")
+  resetPeriod    String   @default("monthly") @map("reset_period")
+  lastUsed       DateTime @default(now()) @map("last_used")
+  lastReset      DateTime @default(now()) @map("last_reset")
+  metadata       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  featureGate  FeatureGate  @relation(fields: [feature], references: [feature])
+
+  @@unique([userId, projectId, feature, resetPeriod])
+  @@index([organizationId])
+  @@index([feature])
+  @@index([organizationId, feature, lastUsed(sort: Desc)])
+  @@map("feature_usage")
+}
+
+model FeatureAccessLog {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  projectId     String    @map("project_id")
+  feature       String
+  accessGranted Boolean   @map("access_granted")
+  reason        String?
+  planTier      PlanTier? @map("plan_tier")
+  usageCount    Int?      @map("usage_count")
+  usageLimit    Int?      @map("usage_limit")
+  metadata      Json      @default("{}")
+  accessedAt    DateTime  @default(now()) @map("accessed_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@index([projectId])
+  @@map("feature_access_logs")
+}
+
+model FeatureOverride {
+  id             String              @id @default(cuid())
+  userId         String?             @map("user_id")
+  projectId      String?             @map("project_id")
+  organizationId String?             @map("organization_id")
+  feature        String
+  overrideType   FeatureOverrideType @map("override_type")
+  overrideValue  Json                @map("override_value")
+  reason         String?
+  expiresAt      DateTime?           @map("expires_at")
+  createdBy      String              @map("created_by")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  // Relations
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@map("feature_overrides")
+}
+
+model FeatureFlag {
+  id          String          @id @default(cuid())
+  key         String          @unique // e.g., "auth.oauth2.enabled"
+  name        String // Human-readable name
+  description String? // What this flag controls
+  type        FeatureFlagType // BOOLEAN, PERCENTAGE, etc.
+
+  // Default value (global)
+  enabled Boolean @default(false)
+
+  // Percentage rollout (0-100)
+  rolloutPercentage Int? @default(0) @map("rollout_percentage")
+
+  // Date-based activation
+  enabledFrom  DateTime? @map("enabled_from")
+  enabledUntil DateTime? @map("enabled_until")
+
+  // Environment restrictions
+  environments Json? // ["development", "staging", "production"]
+
+  // Metadata
+  category String? // "auth", "billing", "workflow", etc.
+  tags     Json? // ["beta", "experimental", "deprecated"]
+
+  // Dependencies
+  dependsOn Json? @map("depends_on") // Other feature flags this depends on
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by")
+  updatedBy String?  @map("updated_by")
+
+  // Relations
+  overrides FeatureFlagOverride[]
+  auditLogs FeatureFlagAuditLog[]
+
+  @@index([key])
+  @@index([category])
+  @@index([enabled])
+  @@map("feature_flags")
+}
+
+model FeatureFlagOverride {
+  id     String @id @default(cuid())
+  flagId String @map("flag_id")
+
+  // Override scope
+  scope FeatureFlagScope // USER, ORGANIZATION, ROLE
+
+  // Target identifiers
+  userId         String? @map("user_id")
+  organizationId String? @map("organization_id")
+  roleId         String? @map("role_id")
+
+  // Override value
+  enabled Boolean
+
+  // Audit
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by")
+
+  // Relations
+  flag         FeatureFlag   @relation(fields: [flagId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([flagId, scope, userId, organizationId, roleId])
+  @@index([flagId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([scope])
+  @@map("feature_flag_overrides")
+}
+
+model FeatureFlagAuditLog {
+  id     String @id @default(cuid())
+  flagId String @map("flag_id")
+
+  action String // "created", "updated", "deleted", "checked", "override_added", "override_removed"
+
+  // Change details
+  previousValue Json? @map("previous_value")
+  newValue      Json? @map("new_value")
+
+  // Context
+  userId         String? @map("user_id")
+  organizationId String? @map("organization_id")
+  ipAddress      String? @map("ip_address")
+  userAgent      String? @map("user_agent")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  flag FeatureFlag @relation(fields: [flagId], references: [id], onDelete: Cascade)
+
+  @@index([flagId])
+  @@index([action])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("feature_flag_audit_logs")
+}
+
+enum FeatureOverrideType {
+  GRANT
+  DENY
+  LIMIT_INCREASE
+  LIMIT_DECREASE
+
+  @@map("feature_override_type")
+}
+
+enum FeatureFlagType {
+  BOOLEAN
+  PERCENTAGE
+  WHITELIST
+  DATE_RANGE
+  ENVIRONMENT
+}
+
+enum FeatureFlagScope {
+  USER
+  ORGANIZATION
+  ROLE
+  GLOBAL
+}
+

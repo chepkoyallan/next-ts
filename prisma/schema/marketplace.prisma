@@ -1,0 +1,160 @@
+// Workflow marketplace: listings, purchases, reviews
+// ============================================================================
+
+model MarketplaceWorkflow {
+  id          String            @id @default(cuid())
+  name        String
+  description String
+  category    WorkflowCategory
+  version     String
+  authorId    String            @map("author_id")
+  pricing     Json
+  tags        String[]          @default([])
+  downloads   BigInt            @default(0)
+  rating      Decimal           @default(0) @db.Decimal(3, 2)
+  reviewCount Int               @default(0) @map("review_count")
+  status      MarketplaceStatus @default(DRAFT)
+  featured    Boolean           @default(false)
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  deletedAt   DateTime?         @map("deleted_at")
+
+  // Relations
+  specification WorkflowSpecification?
+  purchases     WorkflowPurchase[]
+  reviews       WorkflowReview[]
+  revenue       MarketplaceRevenue[]
+
+  @@index([deletedAt])
+  @@map("marketplace_workflows")
+}
+
+model WorkflowSpecification {
+  id            String   @id @default(cuid())
+  workflowId    String   @unique @map("workflow_id")
+  spec          Json
+  documentation Json
+  requirements  Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("workflow_specifications")
+}
+
+model WorkflowPurchase {
+  id            String         @id @default(cuid())
+  workflowId    String         @map("workflow_id")
+  buyerId       String         @map("buyer_id")
+  projectId     String         @map("project_id")
+  licenseType   LicenseType    @map("license_type")
+  purchasePrice Decimal        @map("purchase_price") @db.Decimal(10, 2)
+  platformFee   Decimal        @map("platform_fee") @db.Decimal(10, 2)
+  sellerRevenue Decimal        @map("seller_revenue") @db.Decimal(10, 2)
+  currency      String         @default("USD")
+  status        PurchaseStatus @default(PENDING)
+  paymentId     String?        @map("payment_id")
+  purchasedAt   DateTime       @default(now()) @map("purchased_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  project  Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  revenue  MarketplaceRevenue?
+  reviews  WorkflowReview[]
+
+  @@map("workflow_purchases")
+}
+
+model WorkflowReview {
+  id           String   @id @default(cuid())
+  workflowId   String   @map("workflow_id")
+  reviewerId   String   @map("reviewer_id")
+  purchaseId   String?  @map("purchase_id")
+  rating       Int
+  title        String?
+  comment      String?
+  isVerified   Boolean  @default(false) @map("is_verified")
+  helpfulCount Int      @default(0) @map("helpful_count")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  reviewer User                @relation(fields: [reviewerId], references: [id], onDelete: Cascade)
+  purchase WorkflowPurchase?   @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  @@unique([workflowId, reviewerId])
+  @@map("workflow_reviews")
+}
+
+model MarketplaceRevenue {
+  id            String       @id @default(cuid())
+  purchaseId    String       @unique @map("purchase_id")
+  workflowId    String       @map("workflow_id")
+  sellerId      String       @map("seller_id")
+  grossRevenue  Decimal      @map("gross_revenue") @db.Decimal(10, 2)
+  platformFee   Decimal      @map("platform_fee") @db.Decimal(10, 2)
+  netRevenue    Decimal      @map("net_revenue") @db.Decimal(10, 2)
+  currency      String       @default("USD")
+  feePercentage Decimal      @map("fee_percentage") @db.Decimal(5, 2)
+  payoutStatus  PayoutStatus @default(PENDING) @map("payout_status")
+  payoutDate    DateTime?    @map("payout_date")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  // Relations
+  purchase WorkflowPurchase    @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  workflow MarketplaceWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@map("marketplace_revenue")
+}
+
+enum WorkflowCategory {
+  DATA_PROCESSING
+  ML_TRAINING
+  ETL
+  MONITORING
+  AUTOMATION
+  ANALYTICS
+
+  @@map("workflow_category")
+}
+
+enum MarketplaceStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+
+  @@map("marketplace_status")
+}
+
+enum LicenseType {
+  SINGLE_USE
+  UNLIMITED
+  TEAM
+  ENTERPRISE
+
+  @@map("license_type")
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  DISPUTED
+
+  @@map("purchase_status")
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+
+  @@map("payout_status")
+}
+

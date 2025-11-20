@@ -1,0 +1,125 @@
+// Application, user, and plugin configuration
+// ============================================================================
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  // General Settings
+  autoSave         Boolean @default(true) @map("auto_save")
+  autoSaveInterval Int     @default(30) @map("auto_save_interval")
+  defaultView      String  @default("grid") @map("default_view") // grid, list, kanban
+  itemsPerPage     Int     @default(20) @map("items_per_page")
+
+  // Theme & Appearance
+  themeMode    String  @default("auto") // light, dark, auto
+  primaryColor String  @default("#1976d2") @map("primary_color")
+  compactMode  Boolean @default(false) @map("compact_mode")
+  animations   Boolean @default(true)
+
+  // Notifications
+  emailNotifications  Boolean @default(true) @map("email_notifications")
+  pushNotifications   Boolean @default(false) @map("push_notifications")
+  notifySchemaCreated Boolean @default(true) @map("notify_schema_created")
+  notifyAssignment    Boolean @default(true) @map("notify_assignment")
+  notifySubmission    Boolean @default(false) @map("notify_submission")
+
+  // Security
+  sessionTimeout        Int     @default(30) @map("session_timeout")
+  requirePasswordChange Boolean @default(false) @map("require_password_change")
+
+  // Editor Preferences
+  editorTheme  String  @default("vs-dark") @map("editor_theme")
+  fontSize     Int     @default(14) @map("font_size")
+  tabSize      Int     @default(2) @map("tab_size")
+  autoComplete Boolean @default(true) @map("auto_complete")
+  formatOnSave Boolean @default(true) @map("format_on_save")
+
+  // Advanced Options
+  debugMode            Boolean @default(false) @map("debug_mode")
+  cacheEnabled         Boolean @default(true) @map("cache_enabled")
+  experimentalFeatures Boolean @default(false) @map("experimental_features")
+
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_settings")
+}
+
+model AppConfig {
+  id          String  @id @default(cuid())
+  key         String  @unique // e.g., "ui.theme", "features.enableChat"
+  value       Json // Configuration value (can be any JSON type)
+  category    String // "ui", "features", "modules", "branding", etc.
+  description String? // Human-readable description
+  isSystem    Boolean @default(false) @map("is_system") // System vs user-defined
+  isPublic    Boolean @default(true) @map("is_public") // Can users override?
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([isSystem])
+  @@map("app_config")
+}
+
+model UserConfig {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  key    String // Configuration key (matches AppConfig.key)
+  value  Json // User's override value
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+  @@map("user_config")
+}
+
+model OrganizationConfig {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  key            String // Configuration key (matches AppConfig.key)
+  value          Json // Organization's override value
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@index([key])
+  @@map("organization_config")
+}
+
+model PluginConfig {
+  id       String  @id @default(cuid())
+  pluginId String  @unique @map("plugin_id") // e.g., "auth", "dashboard"
+  enabled  Boolean @default(true)
+  config   Json    @default("{}") // Plugin-specific configuration
+  priority Int     @default(0) // Load order priority
+
+  // Override settings
+  routes     Json? // Override plugin routes
+  navigation Json? // Override plugin navigation
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled])
+  @@index([priority])
+  @@map("plugin_config")
+}
+

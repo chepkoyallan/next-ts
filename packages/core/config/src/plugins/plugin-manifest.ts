@@ -56,6 +56,14 @@ export interface PluginAuthor {
   url?: string;
 }
 
+/**
+ * Validation result interface
+ */
+export interface ValidationResult {
+  valid: boolean;
+  errors?: string[];
+}
+
 export interface PluginManifest {
   /** Plugin metadata */
   id: string;
@@ -198,30 +206,44 @@ export async function loadPluginManifest(path: string): Promise<PluginManifest> 
 /**
  * Validate plugin manifest
  */
-export function validatePluginManifest(manifest: PluginManifest): boolean {
+export function validatePluginManifest(manifest: PluginManifest): ValidationResult {
+  const errors: string[] = [];
+
   // Check required fields
-  if (!manifest.id || !manifest.name || !manifest.version) {
-    return false;
+  if (!manifest.id) {
+    errors.push('Missing required field: id');
+  }
+  if (!manifest.name) {
+    errors.push('Missing required field: name');
+  }
+  if (!manifest.version) {
+    errors.push('Missing required field: version');
+  }
+
+  // If required fields are missing, return early
+  if (errors.length > 0) {
+    return { valid: false, errors };
   }
 
   // Validate version format (basic semver check)
   const versionRegex = /^\d+\.\d+\.\d+/;
   if (!versionRegex.test(manifest.version)) {
-    console.warn(`[PluginManifest] Invalid version format: ${manifest.version}`);
-    return false;
+    errors.push(`Invalid version format: ${manifest.version} (expected semver format like 1.0.0)`);
   }
 
   // Validate dependencies
   if (manifest.dependencies) {
     for (const dep of manifest.dependencies) {
       if (!dep.id) {
-        console.warn('[PluginManifest] Dependency missing id');
-        return false;
+        errors.push('Dependency missing id');
       }
     }
   }
 
-  return true;
+  return {
+    valid: errors.length === 0,
+    errors: errors.length > 0 ? errors : undefined,
+  };
 }
 
 /**

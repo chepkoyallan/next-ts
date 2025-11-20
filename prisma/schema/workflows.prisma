@@ -1,0 +1,227 @@
+// Workflow orchestration: workflows, tasks, executions
+// ============================================================================
+
+model Workflow {
+  id               String         @id @default(cuid())
+  projectId        String         @map("project_id")
+  organizationId   String         @map("organization_id") // For direct org filtering
+  domain           String
+  name             String
+  version          String
+  description      String?
+  spec             Json
+  compiledWorkflow Json?          @map("compiled_workflow")
+  status           WorkflowStatus @default(ACTIVE)
+
+  // Flyte integration fields
+  flyteWorkflowId String  @unique @map("flyte_workflow_id") // Full Flyte ID: "org-abc123-proj:domain:name:version"
+  createdBy       String  @map("created_by") // User who created this workflow
+  isDeleted       Boolean @default(false) @map("is_deleted")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator     User                @relation("WorkflowCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  executions  WorkflowExecution[]
+  launchPlans LaunchPlan[]
+
+  @@unique([projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([isDeleted])
+  @@index([deletedAt])
+  @@index([status])
+  @@map("workflows")
+}
+
+model LaunchPlan {
+  id             String           @id @default(cuid())
+  workflowId     String           @map("workflow_id")
+  projectId      String           @map("project_id")
+  organizationId String           @map("organization_id") // For direct org filtering
+  domain         String
+  name           String
+  version        String
+  spec           Json
+  schedule       Json?
+  status         LaunchPlanStatus @default(ACTIVE)
+
+  // Flyte integration fields
+  flyteLaunchPlanId String  @unique @map("flyte_launch_plan_id") // Full Flyte ID
+  createdBy         String  @map("created_by")
+  isDeleted         Boolean @default(false) @map("is_deleted")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  workflow   Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator    User                @relation("LaunchPlanCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  executions WorkflowExecution[]
+
+  @@unique([projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([isDeleted])
+  @@index([deletedAt])
+  @@index([status])
+  @@map("launch_plans")
+}
+
+model WorkflowExecution {
+  id             String         @id @default(cuid())
+  executionId    String         @unique @map("execution_id")
+  workflowId     String?        @map("workflow_id")
+  launchPlanId   String?        @map("launch_plan_id")
+  projectId      String         @map("project_id")
+  organizationId String         @map("organization_id") // For direct org filtering
+  domain         String
+  name           String
+  phase          ExecutionPhase @default(UNDEFINED)
+  startedAt      DateTime?      @map("started_at")
+  duration       Int? // milliseconds
+  inputs         Json           @default("{}")
+  outputs        Json?
+  error          Json?
+  metadata       Json           @default("{}")
+
+  // Flyte integration fields
+  flyteExecutionId String @map("flyte_execution_id") // Flyte execution ID
+  createdBy        String @map("created_by") // User who created this execution
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  workflow   Workflow?   @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  launchPlan LaunchPlan? @relation(fields: [launchPlanId], references: [id], onDelete: Restrict)
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  initiator  User        @relation("ExecutionInitiator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([phase])
+  @@index([startedAt])
+  @@index([organizationId, phase, startedAt])
+  @@index([projectId, phase])
+  @@map("workflow_executions")
+}
+
+model Task {
+  id             String  @id @default(cuid())
+  projectId      String  @map("project_id")
+  organizationId String  @map("organization_id") // For direct org filtering
+  domain         String
+  name           String
+  version        String
+  description    String?
+  spec           Json
+
+  // Flyte integration fields
+  flyteTaskId String  @unique @map("flyte_task_id") // Full Flyte ID: "org-abc123-proj:domain:name:version"
+  createdBy   String  @map("created_by") // User who created this task
+  isDeleted   Boolean @default(false) @map("is_deleted")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  creator User @relation("TaskCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([createdBy])
+  @@index([isDeleted])
+  @@index([deletedAt])
+  @@map("tasks")
+}
+
+model WorkflowDraft {
+  id             String  @id @default(cuid())
+  organizationId String? @map("organization_id") // Multi-tenancy (nullable for backwards compatibility)
+  name           String
+  description    String?
+
+  // Flyte project/domain
+  project String
+  domain  String
+  version String
+
+  // Workflow definition (serialized)
+  nodes           Json // WorkflowBuilderNode[]
+  edges           Json // WorkflowBuilderEdge[]
+  workflowInputs  Json? @map("workflow_inputs") // Workflow input parameters
+  workflowOutputs Json? @map("workflow_outputs") // Workflow output parameters
+  metadata        Json? // Additional metadata (tags, author, etc.)
+
+  // Status
+  status WorkflowDraftStatus @default(DRAFT) // 'draft' | 'deployed' | 'archived'
+
+  // Metadata
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Deployment info (if deployed)
+  deployedAt DateTime? @map("deployed_at")
+  deployedBy String?   @map("deployed_by")
+  workflowId String?   @map("workflow_id") // Flyte workflow ID
+
+  // Relations
+  creator  User  @relation("WorkflowDraftCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  deployer User? @relation("WorkflowDraftDeployer", fields: [deployedBy], references: [id], onDelete: Restrict)
+
+  @@unique([name, project, domain, version, organizationId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("workflow_drafts")
+}
+
+enum WorkflowStatus {
+  ACTIVE
+  ARCHIVED
+  DEPRECATED
+
+  @@map("workflow_status")
+}
+
+enum LaunchPlanStatus {
+  ACTIVE
+  ARCHIVED
+  INACTIVE
+
+  @@map("launch_plan_status")
+}
+
+enum ExecutionPhase {
+  UNDEFINED
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ABORTED
+  TIMED_OUT
+  FAILING
+
+  @@map("execution_phase")
+}
+
+enum WorkflowDraftStatus {
+  DRAFT
+  DEPLOYED
+  ARCHIVED
+
+  @@map("workflow_draft_status")
+}
+

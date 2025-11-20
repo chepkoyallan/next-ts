@@ -1,0 +1,91 @@
+// Audit logs, compliance, and GDPR
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  projectId  String   @map("project_id")
+  action     String
+  resource   String
+  resourceId String   @map("resource_id")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  timestamp  DateTime @default(now())
+  metadata   Json     @default("{}")
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // ⚡ Performance indexes
+  @@index([userId])
+  @@index([projectId])
+  @@index([timestamp])
+  @@index([action])
+  @@index([resource])
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([projectId, timestamp(sort: Desc)])
+  @@index([action, timestamp(sort: Desc)])
+  @@index([resource, timestamp(sort: Desc)])
+  @@index([resource, resourceId, timestamp(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model DataClassification {
+  id                  String    @id @default(cuid())
+  resourceType        String    @map("resource_type")
+  resourceId          String    @map("resource_id")
+  classificationLevel String    @map("classification_level")
+  categories          String[]  @default([])
+  piiDetected         Boolean   @default(false) @map("pii_detected")
+  sensitiveFields     String[]  @default([]) @map("sensitive_fields")
+  retentionPolicy     String    @default("standard") @map("retention_policy")
+  encrypted           Boolean   @default(false)
+  classifiedBy        String    @map("classified_by")
+  classifiedAt        DateTime  @default(now()) @map("classified_at")
+  reviewedAt          DateTime? @map("reviewed_at")
+  metadata            Json      @default("{}")
+
+  @@unique([resourceType, resourceId])
+  @@map("data_classifications")
+}
+
+model GdprRequest {
+  id           String            @id @default(cuid())
+  userId       String            @map("user_id")
+  requestType  GdprRequestType   @map("request_type")
+  status       GdprRequestStatus @default(PENDING)
+  details      Json
+  responseData Json?             @map("response_data")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  dueDate      DateTime          @map("due_date")
+  completedAt  DateTime?         @map("completed_at")
+  completedBy  String?           @map("completed_by")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gdpr_requests")
+}
+
+enum GdprRequestType {
+  ACCESS
+  RECTIFICATION
+  ERASURE
+  PORTABILITY
+  RESTRICTION
+  OBJECTION
+
+  @@map("gdpr_request_type")
+}
+
+enum GdprRequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  EXPIRED
+
+  @@map("gdpr_request_status")
+}
+

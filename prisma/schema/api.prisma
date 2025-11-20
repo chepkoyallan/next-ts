@@ -1,0 +1,151 @@
+// API keys, rate limiting, and webhooks
+// ============================================================================
+
+model ApiKey {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
+  name        String
+  keyHash     String   @unique @map("key_hash") // Hashed API key
+  keyPrefix   String   @map("key_prefix") // First 8 chars for display
+  permissions String[] @default([]) // Scoped permissions
+
+  // Status
+  isActive  Boolean   @default(true) @map("is_active")
+  expiresAt DateTime? @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  // Usage tracking
+  lastUsedAt     DateTime? @map("last_used_at")
+  lastUsedIp     String?   @map("last_used_ip")
+  usageCount     BigInt    @default(0) @map("usage_count")
+  rateLimitTier  String    @default("standard") @map("rate_limit_tier")
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usageLogs  ApiUsageLog[]
+  rateLimits ApiRateLimit[]
+
+  @@index([userId])
+  @@index([keyHash])
+  @@index([keyPrefix])
+  @@index([isActive])
+  @@index([expiresAt])
+  @@map("api_keys")
+}
+
+model ApiUsageLog {
+  id       String @id @default(cuid())
+  apiKeyId String @map("api_key_id")
+
+  endpoint   String
+  method     String
+  statusCode Int    @map("status_code")
+  ipAddress  String @map("ip_address")
+  userAgent  String @map("user_agent")
+  duration   Int // milliseconds
+  metadata   Json   @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId])
+  @@index([endpoint])
+  @@index([createdAt])
+  @@index([statusCode])
+  @@map("api_usage_logs")
+}
+
+model ApiRateLimit {
+  id       String @id @default(cuid())
+  apiKeyId String @map("api_key_id")
+
+  // Rate limit configuration
+  limitType  String @map("limit_type") // endpoint, global, resource
+  resource   String? // Specific endpoint or resource
+  maxRequests Int     @map("max_requests")
+  windowMs   Int     @map("window_ms") // Time window in milliseconds
+
+  // Current usage
+  currentCount Int      @default(0) @map("current_count")
+  windowStart  DateTime @map("window_start")
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@unique([apiKeyId, limitType, resource])
+  @@index([apiKeyId])
+  @@index([windowStart])
+  @@map("api_rate_limits")
+}
+
+model Webhook {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+
+  name        String
+  url         String
+  secret      String // For signature verification
+  events      String[] // Events to subscribe to
+  isActive    Boolean  @default(true) @map("is_active")
+  description String?
+
+  // Status
+  lastTriggeredAt DateTime? @map("last_triggered_at")
+  lastSuccessAt   DateTime? @map("last_success_at")
+  lastFailureAt   DateTime? @map("last_failure_at")
+  failureCount    Int       @default(0) @map("failure_count")
+
+  // Configuration
+  retryPolicy Json @default("{}") @map("retry_policy")
+  headers     Json @default("{}") // Custom headers
+  timeout     Int  @default(30000) // milliseconds
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   WebhookDelivery[]
+
+  @@index([organizationId])
+  @@index([isActive])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id        String @id @default(cuid())
+  webhookId String @map("webhook_id")
+
+  event       String
+  payload     Json
+  statusCode  Int?    @map("status_code")
+  response    Json?
+  error       String?
+  duration    Int? // milliseconds
+  attempt     Int     @default(1)
+  isSuccessful Boolean @default(false) @map("is_successful")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  sentAt    DateTime? @map("sent_at")
+
+  // Relations
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([event])
+  @@index([isSuccessful])
+  @@index([createdAt])
+  @@map("webhook_deliveries")
+}

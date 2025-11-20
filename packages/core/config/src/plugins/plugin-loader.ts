@@ -29,9 +29,15 @@ export function getDiscoveredManifests(): PluginManifest[] {
  * This runs at build time and generates the plugin manifest list
  */
 export async function discoverPlugins(): Promise<PluginManifest[]> {
+  // Client-side: use pre-discovered manifests
   if (typeof window !== 'undefined') {
-    // Client-side: use pre-discovered manifests
     return discoveredManifests;
+  }
+
+  // Edge runtime check
+  if (typeof process === 'undefined' || !process.cwd) {
+    console.warn('[PluginLoader] Not in Node.js environment, skipping discovery');
+    return [];
   }
 
   // Server-side: dynamically discover plugins
@@ -83,49 +89,14 @@ export async function discoverPlugins(): Promise<PluginManifest[]> {
 
 /**
  * Convert manifest to Plugin object with dynamic imports
+ * Note: Dynamic imports are disabled to avoid webpack context module issues
+ * Plugins will be created from manifest only
  */
 export async function manifestToPlugin(manifest: PluginManifest): Promise<Plugin | null> {
-  try {
-    // Dynamically import the plugin module
-    const pluginModule = await import(
-      /* @vite-ignore */
-      `@app/${manifest.id}`
-    ).catch(async () => {
-      // Try alternative import path
-      return import(
-        /* @vite-ignore */
-        `../../../features/${manifest.id}`
-      );
-    });
-
-    // Get the plugin export (could be default or named export matching plugin.ts convention)
-    const pluginExport =
-      pluginModule.default ||
-      pluginModule[`${manifest.id}Plugin`] ||
-      pluginModule[`${toCamelCase(manifest.id)}Plugin`];
-
-    if (!pluginExport) {
-      console.warn(
-        `[PluginLoader] No plugin export found for ${manifest.id}, creating from manifest`
-      );
-      // Create plugin from manifest
-      return createPluginFromManifest(manifest);
-    }
-
-    // Merge manifest with plugin export
-    return {
-      ...pluginExport,
-      ...manifest,
-      // Preserve functions from plugin export
-      hooks: pluginExport.hooks || {},
-      components: pluginExport.components || {},
-      providers: pluginExport.providers || [],
-    } as Plugin;
-  } catch (error) {
-    console.error(`[PluginLoader] Error loading plugin ${manifest.id}:`, error);
-    // Fallback: create plugin from manifest only
-    return createPluginFromManifest(manifest);
-  }
+  // For now, we create plugins from manifest only
+  // TODO: Implement a build-time plugin registration system
+  // that doesn't rely on dynamic imports with variable paths
+  return createPluginFromManifest(manifest);
 }
 
 /**

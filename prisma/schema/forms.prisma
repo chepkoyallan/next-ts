@@ -1,0 +1,137 @@
+// Dynamic form generation and submissions
+// ============================================================================
+
+model FormSchema {
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  version        String   @default("1.0.0")
+  schema         Json // JSON Schema object
+  uischema       Json? // UI Schema for layout customization
+  dataSources    Json?    @map("data_sources") // Data source configurations for form fields (EnhancedFormSchema.dataSources)
+  dependencies   Json? // Field dependencies for dynamic form behavior
+  tags           String[] @default([])
+  category       String   @default("general")
+  organizationId String?  @map("organization_id")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Usage tracking
+  assignmentCount Int       @default(0) @map("assignment_count")
+  lastUsed        DateTime? @map("last_used")
+  popularity      Int       @default(0)
+  deletedAt       DateTime? @map("deleted_at")
+
+  // Relations
+  organization  Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments   FormAssignment[]
+  tasksAsInput  TaskDefinition[] @relation("TaskInputSchema")
+  tasksAsOutput TaskDefinition[] @relation("TaskOutputSchema")
+
+  @@index([organizationId])
+  @@index([category])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("form_schemas")
+}
+
+model FormAssignment {
+  id             String  @id @default(cuid())
+  schemaId       String  @map("schema_id")
+  organizationId String? @map("organization_id")
+
+  // Task/Workflow identification (Flyte resource)
+  targetType    FormAssignmentTargetType // 'task' | 'workflow' | 'launchplan'
+  targetProject String                   @map("target_project")
+  targetDomain  String                   @map("target_domain")
+  targetName    String                   @map("target_name")
+  targetVersion String                   @map("target_version")
+
+  assignmentType FormAssignmentType   @map("assignment_type") // input, output, config
+  status         FormAssignmentStatus @default(ACTIVE) // active, inactive, draft
+  configuration  Json?
+  name           String?
+  description    String?
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  schema       FormSchema       @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  submissions  FormSubmission[]
+
+  @@unique([targetProject, targetDomain, targetName, targetVersion, assignmentType])
+  @@index([schemaId])
+  @@index([targetType])
+  @@index([status])
+  @@index([organizationId])
+  @@map("form_assignments")
+}
+
+model FormSubmission {
+  id             String    @id @default(cuid())
+  assignmentId   String    @map("assignment_id")
+  organizationId String?   @map("organization_id")
+  data           Json // Form data
+  isValid        Boolean   @map("is_valid")
+  errors         Json // Validation errors array
+  submittedBy    String?   @map("submitted_by")
+  submittedAt    DateTime? @map("submitted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Analytics fields
+  completionTime Int?                 @map("completion_time") // seconds to complete form
+  status         FormSubmissionStatus @default(SUCCESS) // success, failed, abandoned
+  schemaId       String?              @map("schema_id") // denormalized for analytics
+  taskId         String?              @map("task_id") // denormalized for analytics
+
+  // Relations
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignment   FormAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([assignmentId])
+  @@index([isValid])
+  @@index([submittedBy])
+  @@index([createdAt])
+  @@index([status])
+  @@index([schemaId])
+  @@index([organizationId])
+  @@map("form_submissions")
+}
+
+enum FormAssignmentTargetType {
+  TASK
+  WORKFLOW
+  LAUNCHPLAN
+
+  @@map("form_assignment_target_type")
+}
+
+enum FormAssignmentType {
+  INPUT
+  OUTPUT
+  CONFIG
+
+  @@map("form_assignment_type")
+}
+
+enum FormAssignmentStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+
+  @@map("form_assignment_status")
+}
+
+enum FormSubmissionStatus {
+  SUCCESS
+  FAILED
+  ABANDONED
+
+  @@map("form_submission_status")
+}
+

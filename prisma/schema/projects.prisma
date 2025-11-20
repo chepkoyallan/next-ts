@@ -1,0 +1,56 @@
+// Project management and organization
+// ============================================================================
+
+model Project {
+  id             String  @id @default(cuid())
+  organizationId String  @map("organization_id")
+  name           String
+  description    String?
+  domain         String  @default("development")
+
+  // Flyte integration fields (optional for backwards compatibility)
+  flyteProjectId String? @map("flyte_project_id") // Shared Flyte project ID (e.g., "aus") - multiple UI projects map to one Flyte project
+  flyteOrgPrefix String? @map("flyte_org_prefix") // The organization prefix used (e.g., "org-abc123")
+  flyteState     Int     @default(0) @map("flyte_state") // 0=ACTIVE, 1=ARCHIVED, 2=SYSTEM
+  flyteDomains   Json    @default("[]") @map("flyte_domains") // List of domain objects
+  createdBy      String  @map("created_by") // User who created this project
+  isArchived     Boolean @default(false) @map("is_archived")
+
+  settings  Json      @default("{}")
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator            User                @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  subscriptions      Subscription[]
+  usageRecords       UsageRecord[]
+  executionUsage     ExecutionUsage[]
+  featureUsage       FeatureUsage[]
+  auditLogs          AuditLog[]
+  metrics            Metric[]
+  alerts             Alert[]
+  workflowPurchases  WorkflowPurchase[]
+  workflows          Workflow[]
+  launchPlans        LaunchPlan[]
+  workflowExecutions WorkflowExecution[]
+  bmaasInstances     BmaasInstance[]
+  bmaasNetworks      BmaasNetwork[]
+  bmaasVolumes       BmaasVolume[]
+  bmaasBuckets       BmaasBucket[]
+  bmaasUsageRecords  BmaasUsageRecord[]
+
+  // ⚡ Performance indexes
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([flyteOrgPrefix])
+  @@index([isArchived])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([organizationId, isArchived])
+  @@index([createdBy, deletedAt])
+  @@index([deletedAt])
+  @@map("projects")
+}
+

@@ -1,7 +1,5 @@
-// Prisma Schema v2.0 - Production-Ready Modular Architecture
-// Built from 17 modular domain files for maintainability
-// Base Configuration: generator, datasource, and core settings
-// ============================================================================
+// Revenue System Prisma Schema
+// Complete schema for orchestrator platform revenue system
 
 generator client {
   provider        = "prisma-client-js"
@@ -14,21 +12,8 @@ datasource db {
   // directUrl = env("DIRECT_DATABASE_URL") // Commented out for Accelerate-only usage
 }
 
-
 // ============================================================================
-// _SHARED
-// ============================================================================
-
-// Shared enums and types used across domains
-// ============================================================================
-
-
-
-// ============================================================================
-// AUTH
-// ============================================================================
-
-// Authentication, users, roles, and permissions
+// USER MANAGEMENT MODELS
 // ============================================================================
 
 model User {
@@ -37,83 +22,6 @@ model User {
   name          String
   passwordHash  String  @map("password_hash")
   emailVerified Boolean @default(false) @map("email_verified")
-
-  // Activity tracking
-  lastLoginAt DateTime? @map("last_login_at")
-  lastLoginIp String?   @map("last_login_ip")
-
-  // Timestamps
-  metadata  Json      @default("{}")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  // Relations - Auth & Security
-  userRoles            UserRole[]
-  sessions             UserSession[]
-  emailVerifications   EmailVerification[]
-  profile              UserProfile?
-  security             UserSecurity?
-  socialLinks          UserSocialLink[]
-  notificationSettings UserNotificationSettings?
-
-  // Relations - Organizations & Projects
-  ownedOrganizations  Organization[]       @relation("OrganizationOwner")
-  organizationMembers OrganizationMember[]
-  createdProjects     Project[]            @relation("ProjectCreator")
-
-  // Relations - Workflows
-  createdWorkflows       Workflow[]          @relation("WorkflowCreator")
-  createdTasks           Task[]              @relation("TaskCreator")
-  createdLaunchPlans     LaunchPlan[]        @relation("LaunchPlanCreator")
-  initiatedExecutions    WorkflowExecution[] @relation("ExecutionInitiator")
-  createdWorkflowDrafts  WorkflowDraft[]     @relation("WorkflowDraftCreator")
-  deployedWorkflowDrafts WorkflowDraft[]     @relation("WorkflowDraftDeployer")
-
-  // Relations - BMaaS
-  createdBmaasInstances BmaasInstance[] @relation("BmaasInstanceCreator")
-  createdBmaasVolumes   BmaasVolume[]   @relation("BmaasVolumeCreator")
-  createdBmaasNetworks  BmaasNetwork[]  @relation("BmaasNetworkCreator")
-  createdBmaasBuckets   BmaasBucket[]   @relation("BmaasBucketCreator")
-
-  // Relations - Usage & Billing
-  executionUsage   ExecutionUsage[]
-  featureUsage     FeatureUsage[]
-  billingAddresses BillingAddress[]
-
-  // Relations - Features & Audit
-  featureAccessLogs    FeatureAccessLog[]
-  featureFlagOverrides FeatureFlagOverride[]
-  auditLogs            AuditLog[]
-  gdprRequests         GdprRequest[]
-
-  // Relations - Marketplace
-  workflowReviews WorkflowReview[]
-
-  // Relations - Connectors
-  createdConnectors ConnectorConfig[] @relation("ConnectorCreator")
-
-  // Relations - Notifications
-  notifications Notification[]
-
-  // Relations - API Keys
-  apiKeys ApiKey[]
-
-  // Relations - Configuration
-  settings                 UserSettings?
-  userConfigs              UserConfig[]
-  notificationPreferences  NotificationPreference[]
-
-  @@index([email])
-  @@index([emailVerified])
-  @@index([deletedAt])
-  @@index([createdAt])
-  @@map("users")
-}
-
-model UserProfile {
-  id     String @id @default(cuid())
-  userId String @unique @map("user_id")
 
   // Profile fields
   photoURL    String? @map("photo_url")
@@ -126,317 +34,41 @@ model UserProfile {
   about       String?
   isPublic    Boolean @default(false) @map("is_public")
 
-  // Bio and social
-  bio      String?
-  website  String?
-  company  String?
-  location String?
-  timezone String? @default("UTC")
+  // Social links (JSON field)
+  socialLinks Json? @map("social_links")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  // Notification preferences (JSON field)
+  notificationPreferences Json? @map("notification_preferences")
 
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // 2FA fields
+  twoFactorEnabled     Boolean @default(false) @map("two_factor_enabled")
+  twoFactorSecret      String? @map("two_factor_secret")
+  twoFactorBackupCodes Json?   @map("two_factor_backup_codes")
 
-  @@map("user_profiles")
-}
+  // Activity tracking
+  lastLoginAt DateTime? @map("last_login_at")
+  lastLoginIp String?   @map("last_login_ip")
 
-model UserSocialLink {
-  id       String @id @default(cuid())
-  userId   String @map("user_id")
-  platform String // github, linkedin, twitter, etc.
-  url      String
-  isPublic Boolean @default(true) @map("is_public")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  // Legacy fields
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userRoles            UserRole[]
+  executionUsage       ExecutionUsage[]
+  featureUsage         FeatureUsage[]
+  featureAccessLogs    FeatureAccessLog[]
+  auditLogs            AuditLog[]
+  gdprRequests         GdprRequest[]
+  workflowReviews      WorkflowReview[]
+  organizationMembers  OrganizationMember[]
+  featureFlagOverrides FeatureFlagOverride[]
+  billingAddresses     BillingAddress[]
 
-  @@unique([userId, platform])
-  @@index([userId])
-  @@map("user_social_links")
+  @@map("users")
 }
-
-model UserSecurity {
-  id     String @id @default(cuid())
-  userId String @unique @map("user_id")
-
-  // 2FA/MFA
-  twoFactorEnabled Boolean @default(false) @map("two_factor_enabled")
-  twoFactorSecret  String? @map("two_factor_secret")
-
-  // Password security
-  passwordChangedAt          DateTime? @map("password_changed_at")
-  requirePasswordChange      Boolean   @default(false) @map("require_password_change")
-  failedLoginAttempts        Int       @default(0) @map("failed_login_attempts")
-  accountLockedUntil         DateTime? @map("account_locked_until")
-  lastFailedLoginAttempt     DateTime? @map("last_failed_login_attempt")
-  passwordResetAttempts      Int       @default(0) @map("password_reset_attempts")
-  passwordResetLockedUntil   DateTime? @map("password_reset_locked_until")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  backupCodes        TwoFactorBackupCode[]
-  trustedDevices     TrustedDevice[]
-  securityAuditLogs  SecurityAuditLog[]
-  passwordResetToken PasswordResetToken?
-
-  @@index([userId])
-  @@map("user_security")
-}
-
-model TwoFactorBackupCode {
-  id               String  @id @default(cuid())
-  userSecurityId   String  @map("user_security_id")
-  code             String  @unique
-  isUsed           Boolean @default(false) @map("is_used")
-  usedAt           DateTime? @map("used_at")
-  usedFromIp       String? @map("used_from_ip")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
-
-  @@index([userSecurityId])
-  @@index([code])
-  @@map("two_factor_backup_codes")
-}
-
-model TrustedDevice {
-  id             String @id @default(cuid())
-  userSecurityId String @map("user_security_id")
-
-  deviceFingerprint String   @map("device_fingerprint")
-  deviceName        String?  @map("device_name")
-  userAgent         String
-  ipAddress         String   @map("ip_address")
-  isTrusted         Boolean  @default(false) @map("is_trusted")
-  lastUsedAt        DateTime @default(now()) @map("last_used_at")
-  expiresAt         DateTime @map("expires_at")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
-
-  @@index([userSecurityId])
-  @@index([deviceFingerprint])
-  @@map("trusted_devices")
-}
-
-model UserSession {
-  id     String @id @default(cuid())
-  userId String @map("user_id")
-
-  // Session details
-  token        String   @unique
-  refreshToken String?  @unique @map("refresh_token")
-  ipAddress    String   @map("ip_address")
-  userAgent    String   @map("user_agent")
-  deviceInfo   Json?    @map("device_info")
-
-  // Status
-  isActive       Boolean   @default(true) @map("is_active")
-  lastActivityAt DateTime  @default(now()) @map("last_activity_at")
-  expiresAt      DateTime  @map("expires_at")
-  revokedAt      DateTime? @map("revoked_at")
-  revokedReason  String?   @map("revoked_reason")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([userId, isActive])
-  @@index([token])
-  @@index([expiresAt])
-  @@index([isActive, expiresAt])
-  @@map("user_sessions")
-}
-
-model EmailVerification {
-  id     String @id @default(cuid())
-  userId String @map("user_id")
-
-  email      String
-  token      String    @unique
-  expiresAt  DateTime  @map("expires_at")
-  verifiedAt DateTime? @map("verified_at")
-  verifiedIp String?   @map("verified_ip")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([token])
-  @@index([email])
-  @@index([expiresAt])
-  @@map("email_verifications")
-}
-
-model PasswordResetToken {
-  id             String @id @default(cuid())
-  userSecurityId String @unique @map("user_security_id")
-
-  token      String    @unique
-  expiresAt  DateTime  @map("expires_at")
-  usedAt     DateTime? @map("used_at")
-  ipAddress  String?   @map("ip_address")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
-
-  @@index([token])
-  @@index([expiresAt])
-  @@map("password_reset_tokens")
-}
-
-model UserNotificationSettings {
-  id     String @id @default(cuid())
-  userId String @unique @map("user_id")
-
-  // Email notifications
-  emailEnabled           Boolean @default(true) @map("email_enabled")
-  emailDigest            Boolean @default(true) @map("email_digest")
-  emailDigestFrequency   String  @default("daily") @map("email_digest_frequency") // daily, weekly, never
-
-  // Product notifications
-  productUpdates      Boolean @default(true) @map("product_updates")
-  securityAlerts      Boolean @default(true) @map("security_alerts")
-  billingAlerts       Boolean @default(true) @map("billing_alerts")
-  workflowNotifications Boolean @default(true) @map("workflow_notifications")
-  marketplaceUpdates  Boolean @default(true) @map("marketplace_updates")
-
-  // In-app notifications
-  inAppEnabled     Boolean @default(true) @map("in_app_enabled")
-  desktopEnabled   Boolean @default(false) @map("desktop_enabled")
-  mobileEnabled    Boolean @default(true) @map("mobile_enabled")
-
-  // Quiet hours
-  quietHoursEnabled Boolean @default(false) @map("quiet_hours_enabled")
-  quietHoursStart   String? @map("quiet_hours_start") // HH:mm format
-  quietHoursEnd     String? @map("quiet_hours_end")
-  quietHoursTimezone String? @map("quiet_hours_timezone")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("user_notification_settings")
-}
-
-model SecurityAuditLog {
-  id             String @id @default(cuid())
-  userSecurityId String @map("user_security_id")
-
-  action    String // login_success, login_failed, password_changed, 2fa_enabled, etc.
-  ipAddress String @map("ip_address")
-  userAgent String @map("user_agent")
-  metadata  Json   @default("{}")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  userSecurity UserSecurity @relation(fields: [userSecurityId], references: [id], onDelete: Cascade)
-
-  @@index([userSecurityId])
-  @@index([action])
-  @@index([createdAt])
-  @@map("security_audit_logs")
-}
-
-model Role {
-  id           String    @id @default(cuid())
-  name         String    @unique
-  description  String
-  hierarchy    Int       @default(0)
-  isSystemRole Boolean   @default(false) @map("is_system_role")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
-
-  // Relations
-  userRoles       UserRole[]
-  rolePermissions RolePermission[]
-
-  @@index([deletedAt])
-  @@index([isSystemRole])
-  @@map("roles")
-}
-
-model Permission {
-  id          String    @id @default(cuid())
-  resource    String
-  action      String
-  description String
-  conditions  Json      @default("[]")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
-
-  // Relations
-  rolePermissions RolePermission[]
-
-  @@unique([resource, action])
-  @@index([deletedAt])
-  @@index([resource])
-  @@map("permissions")
-}
-
-model UserRole {
-  id         String    @id @default(cuid())
-  userId     String    @map("user_id")
-  roleId     String    @map("role_id")
-  assignedBy String    @map("assigned_by")
-  assignedAt DateTime  @default(now()) @map("assigned_at")
-  expiresAt  DateTime? @map("expires_at")
-  isActive   Boolean   @default(true) @map("is_active")
-  context    Json      @default("{}")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, roleId])
-  @@map("user_roles")
-}
-
-model RolePermission {
-  id           String @id @default(cuid())
-  roleId       String @map("role_id")
-  permissionId String @map("permission_id")
-
-  // Relations
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  @@unique([roleId, permissionId])
-  @@map("role_permissions")
-}
-
-
-
-// ============================================================================
-// ORGANIZATIONS
-// ============================================================================
-
-// Multi-tenancy: organizations, members, invitations
-// ============================================================================
 
 model Organization {
   id          String             @id @default(cuid())
@@ -448,7 +80,7 @@ model Organization {
   industry    String?
   size        String? // SMALL, MEDIUM, LARGE, ENTERPRISE
   status      OrganizationStatus @default(ACTIVE)
-  ownerId     String             @map("owner_id")
+  ownerId     String?            @map("owner_id")
 
   // Settings and metadata
   settings Json @default("{}") // SSO, branding, security policies
@@ -460,7 +92,6 @@ model Organization {
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  owner                User                     @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   billingAccounts      BillingAccount[]
   projects             Project[]
   members              OrganizationMember[]
@@ -476,14 +107,10 @@ model Organization {
   bmaasBuckets         BmaasBucket[]
   bmaasUsageRecords    BmaasUsageRecord[]
   bmaasQuota           BmaasQuota?
-  featureUsage         FeatureUsage[]
-  webhooks             Webhook[]
 
   @@index([status])
   @@index([ownerId])
   @@index([createdAt])
-  @@index([deletedAt])
-  @@index([slug])
   @@map("organizations")
 }
 
@@ -530,42 +157,6 @@ model OrganizationInvitation {
   @@map("organization_invitations")
 }
 
-enum OrganizationRole {
-  OWNER
-  ADMIN
-  MEMBER
-  VIEWER
-
-  @@map("organization_role")
-}
-
-enum OrganizationStatus {
-  ACTIVE
-  SUSPENDED
-  PENDING_DELETION
-  DELETED
-
-  @@map("organization_status")
-}
-
-enum InvitationStatus {
-  PENDING
-  ACCEPTED
-  EXPIRED
-  CANCELLED
-
-  @@map("invitation_status")
-}
-
-
-
-// ============================================================================
-// PROJECTS
-// ============================================================================
-
-// Project management and organization
-// ============================================================================
-
 model Project {
   id             String  @id @default(cuid())
   organizationId String  @map("organization_id")
@@ -578,7 +169,7 @@ model Project {
   flyteOrgPrefix String? @map("flyte_org_prefix") // The organization prefix used (e.g., "org-abc123")
   flyteState     Int     @default(0) @map("flyte_state") // 0=ACTIVE, 1=ARCHIVED, 2=SYSTEM
   flyteDomains   Json    @default("[]") @map("flyte_domains") // List of domain objects
-  createdBy      String  @map("created_by") // User who created this project
+  createdBy      String? @map("created_by") // User who created this project
   isArchived     Boolean @default(false) @map("is_archived")
 
   settings  Json      @default("{}")
@@ -589,7 +180,6 @@ model Project {
 
   // Relations
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator            User                @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   subscriptions      Subscription[]
   usageRecords       UsageRecord[]
   executionUsage     ExecutionUsage[]
@@ -615,17 +205,78 @@ model Project {
   @@index([organizationId, createdAt(sort: Desc)])
   @@index([organizationId, isArchived])
   @@index([createdBy, deletedAt])
-  @@index([deletedAt])
   @@map("projects")
 }
 
-
-
 // ============================================================================
-// WORKFLOWS
+// RBAC MODELS
 // ============================================================================
 
-// Workflow orchestration: workflows, tasks, executions
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String
+  action      String
+  description String
+  conditions  Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action])
+  @@map("permissions")
+}
+
+model Role {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String
+  hierarchy    Int      @default(0)
+  isSystemRole Boolean  @default(false) @map("is_system_role")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id         String    @id @default(cuid())
+  userId     String    @map("user_id")
+  roleId     String    @map("role_id")
+  assignedBy String    @map("assigned_by")
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+  expiresAt  DateTime? @map("expires_at")
+  isActive   Boolean   @default(true) @map("is_active")
+  context    Json      @default("{}")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String @map("role_id")
+  permissionId String @map("permission_id")
+
+  // Relations
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+// ============================================================================
+// WORKFLOW ORCHESTRATION MODELS
 // ============================================================================
 
 model Workflow {
@@ -642,16 +293,14 @@ model Workflow {
 
   // Flyte integration fields
   flyteWorkflowId String  @unique @map("flyte_workflow_id") // Full Flyte ID: "org-abc123-proj:domain:name:version"
-  createdBy       String  @map("created_by") // User who created this workflow
+  createdBy       String? @map("created_by") // User who created this workflow
   isDeleted       Boolean @default(false) @map("is_deleted")
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  creator     User                @relation("WorkflowCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   executions  WorkflowExecution[]
   launchPlans LaunchPlan[]
 
@@ -659,8 +308,6 @@ model Workflow {
   @@index([organizationId])
   @@index([createdBy])
   @@index([isDeleted])
-  @@index([deletedAt])
-  @@index([status])
   @@map("workflows")
 }
 
@@ -678,25 +325,21 @@ model LaunchPlan {
 
   // Flyte integration fields
   flyteLaunchPlanId String  @unique @map("flyte_launch_plan_id") // Full Flyte ID
-  createdBy         String  @map("created_by")
+  createdBy         String? @map("created_by")
   isDeleted         Boolean @default(false) @map("is_deleted")
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   workflow   Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   project    Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  creator    User                @relation("LaunchPlanCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   executions WorkflowExecution[]
 
   @@unique([projectId, domain, name, version])
   @@index([organizationId])
   @@index([createdBy])
   @@index([isDeleted])
-  @@index([deletedAt])
-  @@index([status])
   @@map("launch_plans")
 }
 
@@ -718,24 +361,20 @@ model WorkflowExecution {
   metadata       Json           @default("{}")
 
   // Flyte integration fields
-  flyteExecutionId String @map("flyte_execution_id") // Flyte execution ID
-  createdBy        String @map("created_by") // User who created this execution
+  flyteExecutionId String  @map("flyte_execution_id") // Flyte execution ID
+  createdBy        String? @map("created_by") // User who created this execution
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  workflow   Workflow?   @relation(fields: [workflowId], references: [id], onDelete: Restrict)
-  launchPlan LaunchPlan? @relation(fields: [launchPlanId], references: [id], onDelete: Restrict)
+  workflow   Workflow?   @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+  launchPlan LaunchPlan? @relation(fields: [launchPlanId], references: [id], onDelete: SetNull)
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  initiator  User        @relation("ExecutionInitiator", fields: [createdBy], references: [id], onDelete: Restrict)
 
   @@index([organizationId])
   @@index([createdBy])
   @@index([phase])
-  @@index([startedAt])
-  @@index([organizationId, phase, startedAt])
-  @@index([projectId, phase])
   @@map("workflow_executions")
 }
 
@@ -751,114 +390,21 @@ model Task {
 
   // Flyte integration fields
   flyteTaskId String  @unique @map("flyte_task_id") // Full Flyte ID: "org-abc123-proj:domain:name:version"
-  createdBy   String  @map("created_by") // User who created this task
+  createdBy   String? @map("created_by") // User who created this task
   isDeleted   Boolean @default(false) @map("is_deleted")
 
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  // Relations
-  creator User @relation("TaskCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([projectId, domain, name, version])
   @@index([organizationId])
-  @@index([projectId])
   @@index([createdBy])
   @@index([isDeleted])
-  @@index([deletedAt])
   @@map("tasks")
 }
 
-model WorkflowDraft {
-  id             String  @id @default(cuid())
-  organizationId String? @map("organization_id") // Multi-tenancy (nullable for backwards compatibility)
-  name           String
-  description    String?
-
-  // Flyte project/domain
-  project String
-  domain  String
-  version String
-
-  // Workflow definition (serialized)
-  nodes           Json // WorkflowBuilderNode[]
-  edges           Json // WorkflowBuilderEdge[]
-  workflowInputs  Json? @map("workflow_inputs") // Workflow input parameters
-  workflowOutputs Json? @map("workflow_outputs") // Workflow output parameters
-  metadata        Json? // Additional metadata (tags, author, etc.)
-
-  // Status
-  status WorkflowDraftStatus @default(DRAFT) // 'draft' | 'deployed' | 'archived'
-
-  // Metadata
-  createdBy String    @map("created_by")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  // Deployment info (if deployed)
-  deployedAt DateTime? @map("deployed_at")
-  deployedBy String?   @map("deployed_by")
-  workflowId String?   @map("workflow_id") // Flyte workflow ID
-
-  // Relations
-  creator  User  @relation("WorkflowDraftCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-  deployer User? @relation("WorkflowDraftDeployer", fields: [deployedBy], references: [id], onDelete: Restrict)
-
-  @@unique([name, project, domain, version, organizationId])
-  @@index([status])
-  @@index([createdBy])
-  @@index([organizationId])
-  @@index([createdAt])
-  @@index([deletedAt])
-  @@map("workflow_drafts")
-}
-
-enum WorkflowStatus {
-  ACTIVE
-  ARCHIVED
-  DEPRECATED
-
-  @@map("workflow_status")
-}
-
-enum LaunchPlanStatus {
-  ACTIVE
-  ARCHIVED
-  INACTIVE
-
-  @@map("launch_plan_status")
-}
-
-enum ExecutionPhase {
-  UNDEFINED
-  QUEUED
-  RUNNING
-  SUCCEEDED
-  FAILED
-  ABORTED
-  TIMED_OUT
-  FAILING
-
-  @@map("execution_phase")
-}
-
-enum WorkflowDraftStatus {
-  DRAFT
-  DEPLOYED
-  ARCHIVED
-
-  @@map("workflow_draft_status")
-}
-
-
-
 // ============================================================================
-// BILLING
-// ============================================================================
-
-// Billing, subscriptions, invoices, and payments
+// BILLING SYSTEM CORE MODELS
 // ============================================================================
 
 model BillingAccount {
@@ -985,13 +531,139 @@ model ExecutionUsage {
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([projectId])
-  @@index([status])
-  @@index([startTime])
-  @@index([projectId, status])
   @@map("execution_usage")
 }
+
+// ============================================================================
+// FEATURE GATING MODELS
+// ============================================================================
+
+model FeatureGate {
+  id                  String   @id @default(cuid())
+  feature             String   @unique
+  name                String
+  description         String?
+  requiredPlans       String[] @map("required_plans")
+  requiredPermissions String[] @default([]) @map("required_permissions")
+  usageLimit          Int?     @map("usage_limit")
+  usagePeriod         String   @default("monthly") @map("usage_period")
+  isActive            Boolean  @default(true) @map("is_active")
+  metadata            Json     @default("{}")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  featureUsage      FeatureUsage[]
+  featureAccessLogs FeatureAccessLog[]
+  featureOverrides  FeatureOverride[]
+
+  @@map("feature_gates")
+}
+
+model FeatureUsage {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  projectId   String   @map("project_id")
+  feature     String
+  usageCount  Int      @default(0) @map("usage_count")
+  resetPeriod String   @default("monthly") @map("reset_period")
+  lastUsed    DateTime @default(now()) @map("last_used")
+  lastReset   DateTime @default(now()) @map("last_reset")
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@unique([userId, projectId, feature, resetPeriod])
+  @@map("feature_usage")
+}
+
+// ============================================================================
+// CORE ENUMS
+// ============================================================================
+
+enum BillingAccountStatus {
+  ACTIVE
+  SUSPENDED
+  DELINQUENT
+  CLOSED
+
+  @@map("billing_account_status")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALING
+  PAST_DUE
+  CANCELED
+  UNPAID
+
+  @@map("subscription_status")
+}
+
+enum PlanTier {
+  FREE
+  BASIC
+  STARTER
+  PROFESSIONAL
+  PREMIUM
+  ENTERPRISE
+
+  @@map("plan_tier")
+}
+
+enum UsageMetric {
+  EXECUTIONS
+  CPU_HOURS
+  MEMORY_GB_HOURS
+  STORAGE_GB
+  NETWORK_GB
+  USERS
+  PROJECTS
+  FORMS
+  FORM_SUBMISSIONS
+  FORM_FIELDS
+  FORM_ASSIGNMENTS
+  CONNECTORS
+  CONNECTOR_CALLS
+  WORKFLOWS
+  WORKFLOW_DRAFTS
+  WORKFLOW_VERSIONS
+  MARKETPLACE_LISTINGS
+  WORKFLOW_PURCHASES
+  ALERTS
+  ALERT_RULES
+  API_KEYS
+  API_CALLS
+  WEBHOOK_ENDPOINTS
+  CUSTOM_ROLES
+  ORGANIZATIONS
+  INVITATIONS
+  COMMENTS
+  TASKS
+  LAUNCH_PLANS
+  SUPPORT_TICKETS
+
+  @@map("usage_metric")
+}
+
+enum ExecutionStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ABORTED
+  TIMED_OUT
+
+  @@map("execution_status")
+}
+
+// ============================================================================
+// INVOICING AND PAYMENTS
+// ============================================================================
 
 model Invoice {
   id               String        @id @default(cuid())
@@ -1021,11 +693,6 @@ model Invoice {
   subscription   Subscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   paymentHistory PaymentHistory[]
 
-  @@index([billingAccountId])
-  @@index([status])
-  @@index([dueDate])
-  @@index([paidAt])
-  @@index([billingAccountId, status])
   @@map("invoices")
 }
 
@@ -1124,125 +791,8 @@ model BillingAddress {
   @@map("billing_addresses")
 }
 
-enum BillingAccountStatus {
-  ACTIVE
-  SUSPENDED
-  DELINQUENT
-  CLOSED
-
-  @@map("billing_account_status")
-}
-
-enum SubscriptionStatus {
-  ACTIVE
-  TRIALING
-  PAST_DUE
-  CANCELED
-  UNPAID
-
-  @@map("subscription_status")
-}
-
-enum PlanTier {
-  FREE
-  BASIC
-  STARTER
-  PROFESSIONAL
-  PREMIUM
-  ENTERPRISE
-
-  @@map("plan_tier")
-}
-
-enum UsageMetric {
-  EXECUTIONS
-  CPU_HOURS
-  MEMORY_GB_HOURS
-  STORAGE_GB
-  NETWORK_GB
-  USERS
-  PROJECTS
-  FORMS
-  FORM_SUBMISSIONS
-  FORM_FIELDS
-  FORM_ASSIGNMENTS
-  CONNECTORS
-  CONNECTOR_CALLS
-  WORKFLOWS
-  WORKFLOW_DRAFTS
-  WORKFLOW_VERSIONS
-  MARKETPLACE_LISTINGS
-  WORKFLOW_PURCHASES
-  ALERTS
-  ALERT_RULES
-  API_KEYS
-  API_CALLS
-  WEBHOOK_ENDPOINTS
-  CUSTOM_ROLES
-  ORGANIZATIONS
-  INVITATIONS
-  COMMENTS
-  TASKS
-  LAUNCH_PLANS
-  SUPPORT_TICKETS
-
-  @@map("usage_metric")
-}
-
-enum ExecutionStatus {
-  RUNNING
-  SUCCEEDED
-  FAILED
-  ABORTED
-  TIMED_OUT
-
-  @@map("execution_status")
-}
-
-enum InvoiceStatus {
-  DRAFT
-  OPEN
-  PAID
-  VOID
-  UNCOLLECTIBLE
-
-  @@map("invoice_status")
-}
-
-enum PaymentStatus {
-  PENDING
-  SUCCEEDED
-  FAILED
-  CANCELED
-  REFUNDED
-
-  @@map("payment_status")
-}
-
-enum BillingAlertType {
-  USAGE_LIMIT
-  COST_SPIKE
-  PAYMENT_FAILED
-  TRIAL_ENDING
-
-  @@map("billing_alert_type")
-}
-
-enum AlertSeverity {
-  INFO
-  WARNING
-  CRITICAL
-
-  @@map("alert_severity")
-}
-
-
-
 // ============================================================================
-// MARKETPLACE
-// ============================================================================
-
-// Workflow marketplace: listings, purchases, reviews
+// MARKETPLACE MODELS
 // ============================================================================
 
 model MarketplaceWorkflow {
@@ -1254,14 +804,13 @@ model MarketplaceWorkflow {
   authorId    String            @map("author_id")
   pricing     Json
   tags        String[]          @default([])
-  downloads   BigInt            @default(0)
+  downloads   Int               @default(0)
   rating      Decimal           @default(0) @db.Decimal(3, 2)
   reviewCount Int               @default(0) @map("review_count")
   status      MarketplaceStatus @default(DRAFT)
   featured    Boolean           @default(false)
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
-  deletedAt   DateTime?         @map("deleted_at")
 
   // Relations
   specification WorkflowSpecification?
@@ -1269,7 +818,6 @@ model MarketplaceWorkflow {
   reviews       WorkflowReview[]
   revenue       MarketplaceRevenue[]
 
-  @@index([deletedAt])
   @@map("marketplace_workflows")
 }
 
@@ -1354,6 +902,219 @@ model MarketplaceRevenue {
   @@map("marketplace_revenue")
 }
 
+// ============================================================================
+// FEATURE GATING EXTENDED MODELS
+// ============================================================================
+
+model FeatureAccessLog {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  projectId     String    @map("project_id")
+  feature       String
+  accessGranted Boolean   @map("access_granted")
+  reason        String?
+  planTier      PlanTier? @map("plan_tier")
+  usageCount    Int?      @map("usage_count")
+  usageLimit    Int?      @map("usage_limit")
+  metadata      Json      @default("{}")
+  accessedAt    DateTime  @default(now()) @map("accessed_at")
+
+  // Relations
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@map("feature_access_logs")
+}
+
+model FeatureOverride {
+  id             String              @id @default(cuid())
+  userId         String?             @map("user_id")
+  projectId      String?             @map("project_id")
+  organizationId String?             @map("organization_id")
+  feature        String
+  overrideType   FeatureOverrideType @map("override_type")
+  overrideValue  Json                @map("override_value")
+  reason         String?
+  expiresAt      DateTime?           @map("expires_at")
+  createdBy      String              @map("created_by")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  // Relations
+  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+
+  @@map("feature_overrides")
+}
+
+// ============================================================================
+// COMPLIANCE AND GOVERNANCE MODELS
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  projectId  String   @map("project_id")
+  action     String
+  resource   String
+  resourceId String   @map("resource_id")
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  timestamp  DateTime @default(now())
+  metadata   Json     @default("{}")
+
+  // Relations
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // ⚡ Performance indexes
+  @@index([userId])
+  @@index([projectId])
+  @@index([timestamp])
+  @@index([action])
+  @@index([resource])
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([projectId, timestamp(sort: Desc)])
+  @@index([action, timestamp(sort: Desc)])
+  @@index([resource, timestamp(sort: Desc)])
+  @@map("audit_logs")
+}
+
+model DataClassification {
+  id                  String    @id @default(cuid())
+  resourceType        String    @map("resource_type")
+  resourceId          String    @map("resource_id")
+  classificationLevel String    @map("classification_level")
+  categories          String[]  @default([])
+  piiDetected         Boolean   @default(false) @map("pii_detected")
+  sensitiveFields     String[]  @default([]) @map("sensitive_fields")
+  retentionPolicy     String    @default("standard") @map("retention_policy")
+  encrypted           Boolean   @default(false)
+  classifiedBy        String    @map("classified_by")
+  classifiedAt        DateTime  @default(now()) @map("classified_at")
+  reviewedAt          DateTime? @map("reviewed_at")
+  metadata            Json      @default("{}")
+
+  @@unique([resourceType, resourceId])
+  @@map("data_classifications")
+}
+
+model GdprRequest {
+  id           String            @id @default(cuid())
+  userId       String            @map("user_id")
+  requestType  GdprRequestType   @map("request_type")
+  status       GdprRequestStatus @default(PENDING)
+  details      Json
+  responseData Json?             @map("response_data")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  dueDate      DateTime          @map("due_date")
+  completedAt  DateTime?         @map("completed_at")
+  completedBy  String?           @map("completed_by")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("gdpr_requests")
+}
+
+// ============================================================================
+// MONITORING AND ALERTING MODELS
+// ============================================================================
+
+model Metric {
+  id          String     @id @default(cuid())
+  name        String
+  type        MetricType
+  value       Decimal    @db.Decimal(15, 6)
+  timestamp   DateTime
+  labels      Json       @default("{}")
+  projectId   String     @map("project_id")
+  executionId String?    @map("execution_id")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("metrics")
+}
+
+model AlertRule {
+  id            String        @id @default(cuid())
+  name          String
+  query         String
+  condition     Json
+  severity      AlertSeverity
+  duration      Int // seconds
+  cooldown      Int           @default(300) // seconds
+  enabled       Boolean       @default(true)
+  notifications Json          @default("[]")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  alerts Alert[]
+
+  @@map("alert_rules")
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  ruleId      String        @map("rule_id")
+  name        String
+  description String?
+  severity    AlertSeverity
+  status      AlertStatus   @default(FIRING)
+  projectId   String        @map("project_id")
+  executionId String?       @map("execution_id")
+  triggeredAt DateTime      @default(now()) @map("triggered_at")
+  resolvedAt  DateTime?     @map("resolved_at")
+  metadata    Json          @default("{}")
+
+  // Relations
+  rule    AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+// ============================================================================
+// ADDITIONAL ENUMS
+// ============================================================================
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PAID
+  VOID
+  UNCOLLECTIBLE
+
+  @@map("invoice_status")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REFUNDED
+
+  @@map("payment_status")
+}
+
+enum BillingAlertType {
+  USAGE_LIMIT
+  COST_SPIKE
+  PAYMENT_FAILED
+  TRIAL_ENDING
+
+  @@map("billing_alert_type")
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+
+  @@map("alert_severity")
+}
+
 enum WorkflowCategory {
   DATA_PROCESSING
   ML_TRAINING
@@ -1402,106 +1163,676 @@ enum PayoutStatus {
   @@map("payout_status")
 }
 
+enum FeatureOverrideType {
+  GRANT
+  DENY
+  LIMIT_INCREASE
+  LIMIT_DECREASE
 
-
-// ============================================================================
-// FEATURES
-// ============================================================================
-
-// Feature gates, flags, and usage tracking
-// ============================================================================
-
-model FeatureGate {
-  id                  String    @id @default(cuid())
-  feature             String    @unique
-  name                String
-  description         String?
-  requiredPlans       String[]  @map("required_plans")
-  requiredPermissions String[]  @default([]) @map("required_permissions")
-  usageLimit          Int?      @map("usage_limit")
-  usagePeriod         String    @default("monthly") @map("usage_period")
-  isActive            Boolean   @default(true) @map("is_active")
-  metadata            Json      @default("{}")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-  deletedAt           DateTime? @map("deleted_at")
-
-  // Relations
-  featureUsage      FeatureUsage[]
-  featureAccessLogs FeatureAccessLog[]
-  featureOverrides  FeatureOverride[]
-
-  @@index([feature])
-  @@index([isActive])
-  @@index([deletedAt])
-  @@map("feature_gates")
+  @@map("feature_override_type")
 }
 
-model FeatureUsage {
+enum GdprRequestType {
+  ACCESS
+  RECTIFICATION
+  ERASURE
+  PORTABILITY
+  RESTRICTION
+  OBJECTION
+
+  @@map("gdpr_request_type")
+}
+
+enum GdprRequestStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  EXPIRED
+
+  @@map("gdpr_request_status")
+}
+
+enum MetricType {
+  COUNTER
+  GAUGE
+  HISTOGRAM
+  SUMMARY
+
+  @@map("metric_type")
+}
+
+enum AlertStatus {
+  FIRING
+  RESOLVED
+  SILENCED
+
+  @@map("alert_status")
+}
+
+// ============================================================================
+// MISSING ENUMS FOR NEW MODELS
+// ============================================================================
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+
+  @@map("organization_role")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_DELETION
+  DELETED
+
+  @@map("organization_status")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+
+  @@map("invitation_status")
+}
+
+enum WorkflowStatus {
+  ACTIVE
+  ARCHIVED
+  DEPRECATED
+
+  @@map("workflow_status")
+}
+
+enum LaunchPlanStatus {
+  ACTIVE
+  ARCHIVED
+  INACTIVE
+
+  @@map("launch_plan_status")
+}
+
+enum ExecutionPhase {
+  UNDEFINED
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  ABORTED
+  TIMED_OUT
+  FAILING
+
+  @@map("execution_phase")
+}
+
+// ============================================================================
+// FORM GENERATION MODELS
+// ============================================================================
+
+model FormSchema {
   id             String   @id @default(cuid())
-  userId         String   @map("user_id")
-  projectId      String   @map("project_id")
-  organizationId String   @map("organization_id")
-  feature        String
-  usageCount     BigInt   @default(0) @map("usage_count")
-  resetPeriod    String   @default("monthly") @map("reset_period")
-  lastUsed       DateTime @default(now()) @map("last_used")
-  lastReset      DateTime @default(now()) @map("last_reset")
-  metadata       Json     @default("{}")
+  name           String
+  description    String?
+  version        String   @default("1.0.0")
+  schema         Json // JSON Schema object
+  uischema       Json? // UI Schema for layout customization
+  dataSources    Json?    @map("data_sources") // Data source configurations for form fields (EnhancedFormSchema.dataSources)
+  dependencies   Json? // Field dependencies for dynamic form behavior
+  tags           String[] @default([])
+  category       String   @default("general")
+  organizationId String?  @map("organization_id")
+  createdBy      String   @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Usage tracking
+  assignmentCount Int       @default(0) @map("assignment_count")
+  lastUsed        DateTime? @map("last_used")
+  popularity      Int       @default(0)
+
+  // Relations
+  organization  Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments   FormAssignment[]
+  tasksAsInput  TaskDefinition[] @relation("TaskInputSchema")
+  tasksAsOutput TaskDefinition[] @relation("TaskOutputSchema")
+
+  @@index([organizationId])
+  @@index([category])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("form_schemas")
+}
+
+model FormAssignment {
+  id             String  @id @default(cuid())
+  schemaId       String  @map("schema_id")
+  organizationId String? @map("organization_id")
+
+  // Task/Workflow identification (Flyte resource)
+  targetType    String // 'task' | 'workflow' | 'launchplan'
+  targetProject String @map("target_project")
+  targetDomain  String @map("target_domain")
+  targetName    String @map("target_name")
+  targetVersion String @map("target_version")
+
+  assignmentType String   @map("assignment_type") // input, output, config
+  status         String   @default("active") // active, inactive, draft
+  configuration  Json?
+  name           String?
+  description    String?
+  createdBy      String   @map("created_by")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   // Relations
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  featureGate  FeatureGate  @relation(fields: [feature], references: [feature])
+  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  schema       FormSchema       @relation(fields: [schemaId], references: [id], onDelete: Cascade)
+  submissions  FormSubmission[]
 
-  @@unique([userId, projectId, feature, resetPeriod])
+  @@unique([targetProject, targetDomain, targetName, targetVersion, assignmentType])
+  @@index([schemaId])
+  @@index([targetType])
+  @@index([status])
   @@index([organizationId])
-  @@index([feature])
-  @@index([organizationId, feature, lastUsed(sort: Desc)])
-  @@map("feature_usage")
+  @@map("form_assignments")
 }
 
-model FeatureAccessLog {
-  id            String    @id @default(cuid())
-  userId        String    @map("user_id")
-  projectId     String    @map("project_id")
-  feature       String
-  accessGranted Boolean   @map("access_granted")
-  reason        String?
-  planTier      PlanTier? @map("plan_tier")
-  usageCount    Int?      @map("usage_count")
-  usageLimit    Int?      @map("usage_limit")
-  metadata      Json      @default("{}")
-  accessedAt    DateTime  @default(now()) @map("accessed_at")
+model FormSubmission {
+  id             String    @id @default(cuid())
+  assignmentId   String    @map("assignment_id")
+  organizationId String?   @map("organization_id")
+  data           Json // Form data
+  isValid        Boolean   @map("is_valid")
+  errors         Json // Validation errors array
+  submittedBy    String?   @map("submitted_by")
+  submittedAt    DateTime? @map("submitted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Analytics fields
+  completionTime Int?    @map("completion_time") // seconds to complete form
+  status         String  @default("success") // success, failed, abandoned
+  schemaId       String? @map("schema_id") // denormalized for analytics
+  taskId         String? @map("task_id") // denormalized for analytics
 
   // Relations
-  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignment   FormAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
 
+  @@index([assignmentId])
+  @@index([isValid])
+  @@index([submittedBy])
+  @@index([createdAt])
+  @@index([status])
+  @@index([schemaId])
+  @@index([organizationId])
+  @@map("form_submissions")
+}
+
+// ============================================================================
+// WORKFLOW BUILDER MODELS
+// ============================================================================
+
+model WorkflowDraft {
+  id             String  @id @default(cuid())
+  organizationId String? @map("organization_id") // Multi-tenancy (nullable for backwards compatibility)
+  name           String
+  description    String?
+
+  // Flyte project/domain
+  project String
+  domain  String
+  version String
+
+  // Workflow definition (serialized)
+  nodes           Json // WorkflowBuilderNode[]
+  edges           Json // WorkflowBuilderEdge[]
+  workflowInputs  Json? @map("workflow_inputs") // Workflow input parameters
+  workflowOutputs Json? @map("workflow_outputs") // Workflow output parameters
+  metadata        Json? // Additional metadata (tags, author, etc.)
+
+  // Status
+  status String @default("draft") // 'draft' | 'deployed' | 'archived'
+
+  // Metadata
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Deployment info (if deployed)
+  deployedAt DateTime? @map("deployed_at")
+  deployedBy String?   @map("deployed_by")
+  workflowId String?   @map("workflow_id") // Flyte workflow ID
+
+  @@unique([name, project, domain, version, organizationId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("workflow_drafts")
+}
+
+// ============================================================================
+// CONNECTOR MODELS
+// ============================================================================
+
+model ConnectorConfig {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Multi-tenancy
+  organizationId String       @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  // Connector type
+  type String // 'rest_api' | 'database' | 'cloud_storage' | 'flyte_workflow' | 'graphql' | 'webhook' | 'custom'
+
+  // Configuration (JSON)
+  configuration  Json // Type-specific config (RestApiConnectorConfig, DatabaseConnectorConfig, etc.)
+  authentication Json? // Encrypted auth credentials (AuthenticationConfig)
+  schema         Json? // Expected output schema (JSONSchema7)
+  dataMapping    Json? @map("data_mapping") // Data mapping configuration (DataMapping)
+
+  // Behavior configuration
+  caching           Json? // Cache configuration (CacheConfig)
+  rateLimit         Json? @map("rate_limit") // Rate limiting configuration (RateLimitConfig)
+  healthCheckConfig Json? @map("health_check_config") // Health check configuration (HealthCheckConfig)
+
+  // Health status
+  status          String    @default("active") // 'active' | 'inactive' | 'error' | 'testing'
+  lastHealthCheck DateTime? @map("last_health_check")
+  healthStatus    String?   @map("health_status") // 'healthy' | 'unhealthy' | 'unknown' | 'degraded'
+
+  // Statistics
+  totalExecutions      Int    @default(0) @map("total_executions")
+  successfulExecutions Int    @default(0) @map("successful_executions")
+  failedExecutions     Int    @default(0) @map("failed_executions")
+  averageResponseTime  Float? @map("average_response_time") // in milliseconds
+
+  // Auto-matching metadata for form field enrichment
+  tags     String[] @default([]) // Tags for automatic field matching (e.g., ["customers", "crm"])
+  category String? // Category for organization (e.g., "crm", "inventory", "hr")
+
+  // Metadata
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  auditLogs ConnectorAuditLog[]
+
+  @@index([type])
+  @@index([status])
+  @@index([organizationId])
+  @@index([createdBy])
+  @@index([healthStatus])
+  @@index([category])
+  @@index([organizationId, createdAt(sort: Desc)]) // ⚡ Composite index for list queries
+  @@index([organizationId, type, status]) // ⚡ Composite index for filtered list queries
+  @@map("connector_configs")
+}
+
+// ============================================================================
+// CONNECTOR AUDIT LOG
+// ============================================================================
+
+model ConnectorAuditLog {
+  id          String          @id @default(cuid())
+  connectorId String          @map("connector_id")
+  connector   ConnectorConfig @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+  // Action details
+  action         String // 'created' | 'updated' | 'deleted' | 'executed' | 'tested' | 'health_check'
+  userId         String @map("user_id")
+  organizationId String @map("organization_id")
+
+  // Execution details
+  queryParams Json? @map("query_params") // ConnectorQueryParams
+  result      Json? // ExecutionResult summary
+
+  // Change tracking
+  changes Json? // Array of { field, oldValue, newValue }
+
+  // Metadata
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  @@index([connectorId])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([timestamp])
+  @@map("connector_audit_logs")
+}
+
+// ============================================================================
+// TASK DEVELOPMENT MODELS (Pydantic-Enforced Tasks)
+// ============================================================================
+
+model TaskDefinition {
+  id             String  @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String  @map("organization_id")
+  projectId      String  @map("project_id")
+  domain         String  @default("development")
+
+  // Schema enforcement - Tasks MUST have input/output schemas
+  inputSchemaId  String @map("input_schema_id")
+  outputSchemaId String @map("output_schema_id")
+
+  inputSchema  FormSchema @relation("TaskInputSchema", fields: [inputSchemaId], references: [id])
+  outputSchema FormSchema @relation("TaskOutputSchema", fields: [outputSchemaId], references: [id])
+
+  // Generated Pydantic models (read-only, auto-generated from schemas)
+  generatedInputModel  String @map("generated_input_model") @db.Text // Python code for input Pydantic model
+  generatedOutputModel String @map("generated_output_model") @db.Text // Python code for output Pydantic model
+
+  // Dynamic function signature (user-defined)
+  functionName   String @default("process_data") @map("function_name") // e.g., "process_data", "transform", "validate"
+  parameterName  String @default("input_data") @map("parameter_name") // e.g., "input_data", "data", "request"
+  inputTypeName  String @default("InputType") @map("input_type_name") // e.g., "UserInput", "DataInput" (from schema name)
+  outputTypeName String @default("OutputType") @map("output_type_name") // e.g., "UserOutput", "ProcessedData" (from schema name)
+
+  // User's task logic (validated to enforce Pydantic usage)
+  taskCode String @db.Text // Complete Python task code (includes models + logic)
+
+  // Dependencies
+  baseImage         String @default("minimal-python") @map("base_image") // Base image: minimal-python, data-science, ml-gpu
+  extraDependencies Json   @default("[]") @map("extra_dependencies") // Additional pip packages: ["pandas==2.0.0"]
+
+  // Validation status
+  isValid          Boolean   @default(false) @map("is_valid")
+  validationErrors Json?     @map("validation_errors") // Array of validation error messages
+  lastValidated    DateTime? @map("last_validated")
+
+  // Flyte registration
+  flyteTaskId        String?                @unique @map("flyte_task_id") // Full Flyte ID after registration
+  registeredAt       DateTime?              @map("registered_at")
+  registrationStatus TaskRegistrationStatus @default(NOT_REGISTERED) @map("registration_status")
+  registrationError  String?                @map("registration_error") @db.Text
+  version            String                 @default("1.0.0")
+
+  // Metadata
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, projectId, domain, name, version])
+  @@index([organizationId])
   @@index([projectId])
-  @@map("feature_access_logs")
+  @@index([inputSchemaId])
+  @@index([outputSchemaId])
+  @@index([isValid])
+  @@index([createdBy])
+  @@index([flyteTaskId])
+  @@index([registrationStatus])
+  @@map("task_definitions")
 }
 
-model FeatureOverride {
-  id             String              @id @default(cuid())
-  userId         String?             @map("user_id")
-  projectId      String?             @map("project_id")
-  organizationId String?             @map("organization_id")
-  feature        String
-  overrideType   FeatureOverrideType @map("override_type")
-  overrideValue  Json                @map("override_value")
-  reason         String?
-  expiresAt      DateTime?           @map("expires_at")
-  createdBy      String              @map("created_by")
-  createdAt      DateTime            @default(now()) @map("created_at")
+enum TaskRegistrationStatus {
+  NOT_REGISTERED
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("task_registration_status")
+}
+
+// ============================================================================
+// AI PROVIDER MODELS (AI-Powered Code Generation)
+// ============================================================================
+
+model AIProviderKey {
+  id             String @id @default(cuid())
+  userId         String @map("user_id")
+  organizationId String @map("organization_id")
+
+  // Provider details
+  provider     String // "openai", "anthropic", "google", "azure_openai"
+  keyName      String  @map("key_name") // User-friendly name (e.g., "Work Account", "Personal")
+  encryptedKey String  @map("encrypted_key") @db.Text // AES-256 encrypted API key
+  model        String? // Preferred model (gpt-4-turbo, claude-3-5-sonnet, etc)
+
+  // Status
+  isDefault Boolean @default(false) @map("is_default")
+  isActive  Boolean @default(true) @map("is_active")
+
+  // Usage tracking
+  usageCount   Int       @default(0) @map("usage_count")
+  lastUsedAt   DateTime? @map("last_used_at")
+  totalCostUsd Decimal   @default(0) @map("total_cost_usd") @db.Decimal(10, 4)
+
+  // Connection test
+  lastTestedAt DateTime? @map("last_tested_at")
+  testStatus   String?   @map("test_status") // "success", "failed", "pending"
+  testError    String?   @map("test_error")
+
+  // Metadata
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
-  featureGate FeatureGate @relation(fields: [feature], references: [feature])
+  generationLogs AIGenerationLog[]
 
-  @@map("feature_overrides")
+  @@unique([userId, provider, keyName])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([provider])
+  @@index([isDefault])
+  @@index([isActive])
+  @@map("ai_provider_keys")
+}
+
+model AIGenerationLog {
+  id             String  @id @default(cuid())
+  userId         String  @map("user_id")
+  organizationId String  @map("organization_id")
+  taskId         String? @map("task_id") // TaskDefinition ID if generation was for a task
+  providerKeyId  String  @map("provider_key_id")
+
+  // Generation details
+  generationType String @map("generation_type") // "generate", "explain", "improve", "refactor"
+  provider       String // "openai", "anthropic", "google", "azure_openai"
+  model          String // "gpt-4-turbo", "claude-3-5-sonnet", etc
+
+  // Input/Output
+  prompt          String  @db.Text // The full prompt sent to AI
+  userDescription String? @map("user_description") @db.Text // User's original request
+  generatedCode   String  @map("generated_code") @db.Text // AI-generated code
+
+  // Context (what was provided to AI)
+  inputSchema  Json?   @map("input_schema") // Input schema snapshot
+  outputSchema Json?   @map("output_schema") // Output schema snapshot
+  functionName String? @map("function_name") // Function name being generated
+  existingCode String? @map("existing_code") @db.Text // If improving existing code
+
+  // Usage metrics
+  tokensUsed       Int     @map("tokens_used")
+  promptTokens     Int?    @map("prompt_tokens")
+  completionTokens Int?    @map("completion_tokens")
+  costUsd          Decimal @map("cost_usd") @db.Decimal(10, 6)
+  generationTimeMs Int     @map("generation_time_ms") // milliseconds
+
+  // Result status
+  success      Boolean
+  errorMessage String? @map("error_message")
+  errorCode    String? @map("error_code")
+
+  // User feedback (optional)
+  wasAccepted  Boolean? @map("was_accepted") // Did user accept/insert the generated code?
+  userRating   Int?     @map("user_rating") // 1-5 stars
+  userFeedback String?  @map("user_feedback") @db.Text
+
+  // Metadata
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  providerKey AIProviderKey @relation(fields: [providerKeyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([taskId])
+  @@index([providerKeyId])
+  @@index([provider])
+  @@index([generationType])
+  @@index([success])
+  @@index([createdAt])
+  @@index([userId, createdAt(sort: Desc)]) // For user's generation history
+  @@index([organizationId, createdAt(sort: Desc)]) // For org analytics
+  @@map("ai_generation_logs")
+}
+
+// ============================================================================
+// USER SETTINGS MODEL
+// ============================================================================
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique @map("user_id")
+
+  // General Settings
+  autoSave         Boolean @default(true) @map("auto_save")
+  autoSaveInterval Int     @default(30) @map("auto_save_interval")
+  defaultView      String  @default("grid") @map("default_view") // grid, list, kanban
+  itemsPerPage     Int     @default(20) @map("items_per_page")
+
+  // Theme & Appearance
+  themeMode    String  @default("auto") // light, dark, auto
+  primaryColor String  @default("#1976d2") @map("primary_color")
+  compactMode  Boolean @default(false) @map("compact_mode")
+  animations   Boolean @default(true)
+
+  // Notifications
+  emailNotifications  Boolean @default(true) @map("email_notifications")
+  pushNotifications   Boolean @default(false) @map("push_notifications")
+  notifySchemaCreated Boolean @default(true) @map("notify_schema_created")
+  notifyAssignment    Boolean @default(true) @map("notify_assignment")
+  notifySubmission    Boolean @default(false) @map("notify_submission")
+
+  // Security
+  sessionTimeout        Int     @default(30) @map("session_timeout")
+  requirePasswordChange Boolean @default(false) @map("require_password_change")
+
+  // Editor Preferences
+  editorTheme  String  @default("vs-dark") @map("editor_theme")
+  fontSize     Int     @default(14) @map("font_size")
+  tabSize      Int     @default(2) @map("tab_size")
+  autoComplete Boolean @default(true) @map("auto_complete")
+  formatOnSave Boolean @default(true) @map("format_on_save")
+
+  // Advanced Options
+  debugMode            Boolean @default(false) @map("debug_mode")
+  cacheEnabled         Boolean @default(true) @map("cache_enabled")
+  experimentalFeatures Boolean @default(false) @map("experimental_features")
+
+  // Metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("user_settings")
+}
+
+// ============================================================================
+// APPLICATION CONFIGURATION MODELS
+// ============================================================================
+
+model AppConfig {
+  id          String  @id @default(cuid())
+  key         String  @unique // e.g., "ui.theme", "features.enableChat"
+  value       Json // Configuration value (can be any JSON type)
+  category    String // "ui", "features", "modules", "branding", etc.
+  description String? // Human-readable description
+  isSystem    Boolean @default(false) @map("is_system") // System vs user-defined
+  isPublic    Boolean @default(true) @map("is_public") // Can users override?
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([isSystem])
+  @@map("app_config")
+}
+
+model UserConfig {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  key    String // Configuration key (matches AppConfig.key)
+  value  Json // User's override value
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, key])
+  @@index([userId])
+  @@index([key])
+  @@map("user_config")
+}
+
+model OrganizationConfig {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  key            String // Configuration key (matches AppConfig.key)
+  value          Json // Organization's override value
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([organizationId, key])
+  @@index([organizationId])
+  @@index([key])
+  @@map("organization_config")
+}
+
+model PluginConfig {
+  id       String  @id @default(cuid())
+  pluginId String  @unique @map("plugin_id") // e.g., "auth", "dashboard"
+  enabled  Boolean @default(true)
+  config   Json    @default("{}") // Plugin-specific configuration
+  priority Int     @default(0) // Load order priority
+
+  // Override settings
+  routes     Json? // Override plugin routes
+  navigation Json? // Override plugin navigation
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([enabled])
+  @@index([priority])
+  @@map("plugin_config")
+}
+
+// ============================================================================
+// FEATURE FLAG MODELS
+// ============================================================================
+
+enum FeatureFlagType {
+  BOOLEAN
+  PERCENTAGE
+  WHITELIST
+  DATE_RANGE
+  ENVIRONMENT
+}
+
+enum FeatureFlagScope {
+  USER
+  ORGANIZATION
+  ROLE
+  GLOBAL
 }
 
 model FeatureFlag {
@@ -1607,448 +1938,9 @@ model FeatureFlagAuditLog {
   @@map("feature_flag_audit_logs")
 }
 
-enum FeatureOverrideType {
-  GRANT
-  DENY
-  LIMIT_INCREASE
-  LIMIT_DECREASE
-
-  @@map("feature_override_type")
-}
-
-enum FeatureFlagType {
-  BOOLEAN
-  PERCENTAGE
-  WHITELIST
-  DATE_RANGE
-  ENVIRONMENT
-}
-
-enum FeatureFlagScope {
-  USER
-  ORGANIZATION
-  ROLE
-  GLOBAL
-}
-
-
-
 // ============================================================================
-// AUDIT
+// DATA MAPPING TEMPLATE MODELS
 // ============================================================================
-
-// Audit logs, compliance, and GDPR
-// ============================================================================
-
-model AuditLog {
-  id         String   @id @default(cuid())
-  userId     String   @map("user_id")
-  projectId  String   @map("project_id")
-  action     String
-  resource   String
-  resourceId String   @map("resource_id")
-  ipAddress  String?  @map("ip_address")
-  userAgent  String?  @map("user_agent")
-  timestamp  DateTime @default(now())
-  metadata   Json     @default("{}")
-
-  // Relations
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  // ⚡ Performance indexes
-  @@index([userId])
-  @@index([projectId])
-  @@index([timestamp])
-  @@index([action])
-  @@index([resource])
-  @@index([userId, timestamp(sort: Desc)])
-  @@index([projectId, timestamp(sort: Desc)])
-  @@index([action, timestamp(sort: Desc)])
-  @@index([resource, timestamp(sort: Desc)])
-  @@index([resource, resourceId, timestamp(sort: Desc)])
-  @@map("audit_logs")
-}
-
-model DataClassification {
-  id                  String    @id @default(cuid())
-  resourceType        String    @map("resource_type")
-  resourceId          String    @map("resource_id")
-  classificationLevel String    @map("classification_level")
-  categories          String[]  @default([])
-  piiDetected         Boolean   @default(false) @map("pii_detected")
-  sensitiveFields     String[]  @default([]) @map("sensitive_fields")
-  retentionPolicy     String    @default("standard") @map("retention_policy")
-  encrypted           Boolean   @default(false)
-  classifiedBy        String    @map("classified_by")
-  classifiedAt        DateTime  @default(now()) @map("classified_at")
-  reviewedAt          DateTime? @map("reviewed_at")
-  metadata            Json      @default("{}")
-
-  @@unique([resourceType, resourceId])
-  @@map("data_classifications")
-}
-
-model GdprRequest {
-  id           String            @id @default(cuid())
-  userId       String            @map("user_id")
-  requestType  GdprRequestType   @map("request_type")
-  status       GdprRequestStatus @default(PENDING)
-  details      Json
-  responseData Json?             @map("response_data")
-  createdAt    DateTime          @default(now()) @map("created_at")
-  dueDate      DateTime          @map("due_date")
-  completedAt  DateTime?         @map("completed_at")
-  completedBy  String?           @map("completed_by")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("gdpr_requests")
-}
-
-enum GdprRequestType {
-  ACCESS
-  RECTIFICATION
-  ERASURE
-  PORTABILITY
-  RESTRICTION
-  OBJECTION
-
-  @@map("gdpr_request_type")
-}
-
-enum GdprRequestStatus {
-  PENDING
-  IN_PROGRESS
-  COMPLETED
-  REJECTED
-  EXPIRED
-
-  @@map("gdpr_request_status")
-}
-
-
-
-// ============================================================================
-// MONITORING
-// ============================================================================
-
-// Metrics, alerts, and system monitoring
-// ============================================================================
-
-model Metric {
-  id          String     @id @default(cuid())
-  name        String
-  type        MetricType
-  value       Decimal    @db.Decimal(15, 6)
-  timestamp   DateTime
-  labels      Json       @default("{}")
-  projectId   String     @map("project_id")
-  executionId String?    @map("execution_id")
-
-  // Relations
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@map("metrics")
-}
-
-model AlertRule {
-  id            String        @id @default(cuid())
-  name          String
-  query         String
-  condition     Json
-  severity      AlertSeverity
-  duration      Int // seconds
-  cooldown      Int           @default(300) // seconds
-  enabled       Boolean       @default(true)
-  notifications Json          @default("[]")
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  alerts Alert[]
-
-  @@map("alert_rules")
-}
-
-model Alert {
-  id          String        @id @default(cuid())
-  ruleId      String        @map("rule_id")
-  name        String
-  description String?
-  severity    AlertSeverity
-  status      AlertStatus   @default(FIRING)
-  projectId   String        @map("project_id")
-  executionId String?       @map("execution_id")
-  triggeredAt DateTime      @default(now()) @map("triggered_at")
-  resolvedAt  DateTime?     @map("resolved_at")
-  metadata    Json          @default("{}")
-
-  // Relations
-  rule    AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@map("alerts")
-}
-
-enum MetricType {
-  COUNTER
-  GAUGE
-  HISTOGRAM
-  SUMMARY
-
-  @@map("metric_type")
-}
-
-enum AlertStatus {
-  FIRING
-  RESOLVED
-  SILENCED
-
-  @@map("alert_status")
-}
-
-
-
-// ============================================================================
-// FORMS
-// ============================================================================
-
-// Dynamic form generation and submissions
-// ============================================================================
-
-model FormSchema {
-  id             String   @id @default(cuid())
-  name           String
-  description    String?
-  version        String   @default("1.0.0")
-  schema         Json // JSON Schema object
-  uischema       Json? // UI Schema for layout customization
-  dataSources    Json?    @map("data_sources") // Data source configurations for form fields (EnhancedFormSchema.dataSources)
-  dependencies   Json? // Field dependencies for dynamic form behavior
-  tags           String[] @default([])
-  category       String   @default("general")
-  organizationId String?  @map("organization_id")
-  createdBy      String   @map("created_by")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  // Usage tracking
-  assignmentCount Int       @default(0) @map("assignment_count")
-  lastUsed        DateTime? @map("last_used")
-  popularity      Int       @default(0)
-  deletedAt       DateTime? @map("deleted_at")
-
-  // Relations
-  organization  Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignments   FormAssignment[]
-  tasksAsInput  TaskDefinition[] @relation("TaskInputSchema")
-  tasksAsOutput TaskDefinition[] @relation("TaskOutputSchema")
-
-  @@index([organizationId])
-  @@index([category])
-  @@index([createdBy])
-  @@index([createdAt])
-  @@index([deletedAt])
-  @@map("form_schemas")
-}
-
-model FormAssignment {
-  id             String  @id @default(cuid())
-  schemaId       String  @map("schema_id")
-  organizationId String? @map("organization_id")
-
-  // Task/Workflow identification (Flyte resource)
-  targetType    FormAssignmentTargetType // 'task' | 'workflow' | 'launchplan'
-  targetProject String                   @map("target_project")
-  targetDomain  String                   @map("target_domain")
-  targetName    String                   @map("target_name")
-  targetVersion String                   @map("target_version")
-
-  assignmentType FormAssignmentType   @map("assignment_type") // input, output, config
-  status         FormAssignmentStatus @default(ACTIVE) // active, inactive, draft
-  configuration  Json?
-  name           String?
-  description    String?
-  createdBy      String   @map("created_by")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  organization Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  schema       FormSchema       @relation(fields: [schemaId], references: [id], onDelete: Cascade)
-  submissions  FormSubmission[]
-
-  @@unique([targetProject, targetDomain, targetName, targetVersion, assignmentType])
-  @@index([schemaId])
-  @@index([targetType])
-  @@index([status])
-  @@index([organizationId])
-  @@map("form_assignments")
-}
-
-model FormSubmission {
-  id             String    @id @default(cuid())
-  assignmentId   String    @map("assignment_id")
-  organizationId String?   @map("organization_id")
-  data           Json // Form data
-  isValid        Boolean   @map("is_valid")
-  errors         Json // Validation errors array
-  submittedBy    String?   @map("submitted_by")
-  submittedAt    DateTime? @map("submitted_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-
-  // Analytics fields
-  completionTime Int?                 @map("completion_time") // seconds to complete form
-  status         FormSubmissionStatus @default(SUCCESS) // success, failed, abandoned
-  schemaId       String?              @map("schema_id") // denormalized for analytics
-  taskId         String?              @map("task_id") // denormalized for analytics
-
-  // Relations
-  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignment   FormAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
-
-  @@index([assignmentId])
-  @@index([isValid])
-  @@index([submittedBy])
-  @@index([createdAt])
-  @@index([status])
-  @@index([schemaId])
-  @@index([organizationId])
-  @@map("form_submissions")
-}
-
-enum FormAssignmentTargetType {
-  TASK
-  WORKFLOW
-  LAUNCHPLAN
-
-  @@map("form_assignment_target_type")
-}
-
-enum FormAssignmentType {
-  INPUT
-  OUTPUT
-  CONFIG
-
-  @@map("form_assignment_type")
-}
-
-enum FormAssignmentStatus {
-  ACTIVE
-  INACTIVE
-  DRAFT
-
-  @@map("form_assignment_status")
-}
-
-enum FormSubmissionStatus {
-  SUCCESS
-  FAILED
-  ABANDONED
-
-  @@map("form_submission_status")
-}
-
-
-
-// ============================================================================
-// CONNECTORS
-// ============================================================================
-
-// External system connectors and integrations
-// ============================================================================
-
-model ConnectorConfig {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
-
-  // Multi-tenancy
-  organizationId String       @map("organization_id")
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  // Connector type
-  type String // 'rest_api' | 'database' | 'cloud_storage' | 'flyte_workflow' | 'graphql' | 'webhook' | 'custom'
-
-  // Configuration (JSON)
-  configuration  Json // Type-specific config (RestApiConnectorConfig, DatabaseConnectorConfig, etc.)
-  authentication Json? // Encrypted auth credentials (AuthenticationConfig)
-  schema         Json? // Expected output schema (JSONSchema7)
-  dataMapping    Json? @map("data_mapping") // Data mapping configuration (DataMapping)
-
-  // Behavior configuration
-  caching           Json? // Cache configuration (CacheConfig)
-  rateLimit         Json? @map("rate_limit") // Rate limiting configuration (RateLimitConfig)
-  healthCheckConfig Json? @map("health_check_config") // Health check configuration (HealthCheckConfig)
-
-  // Health status
-  status          String    @default("active") // 'active' | 'inactive' | 'error' | 'testing'
-  lastHealthCheck DateTime? @map("last_health_check")
-  healthStatus    String?   @map("health_status") // 'healthy' | 'unhealthy' | 'unknown' | 'degraded'
-
-  // Statistics
-  totalExecutions      BigInt @default(0) @map("total_executions")
-  successfulExecutions BigInt @default(0) @map("successful_executions")
-  failedExecutions     BigInt @default(0) @map("failed_executions")
-  averageResponseTime  Float? @map("average_response_time") // in milliseconds
-
-  // Auto-matching metadata for form field enrichment
-  tags     String[] @default([]) // Tags for automatic field matching (e.g., ["customers", "crm"])
-  category String? // Category for organization (e.g., "crm", "inventory", "hr")
-
-  // Metadata
-  createdBy String    @map("created_by")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  // Relations
-  creator   User                @relation("ConnectorCreator", fields: [createdBy], references: [id], onDelete: Restrict)
-  auditLogs ConnectorAuditLog[]
-
-  @@index([type])
-  @@index([status])
-  @@index([organizationId])
-  @@index([createdBy])
-  @@index([healthStatus])
-  @@index([category])
-  @@index([deletedAt])
-  @@index([organizationId, createdAt(sort: Desc)]) // ⚡ Composite index for list queries
-  @@index([organizationId, type, status]) // ⚡ Composite index for filtered list queries
-  @@map("connector_configs")
-}
-
-model ConnectorAuditLog {
-  id          String          @id @default(cuid())
-  connectorId String          @map("connector_id")
-  connector   ConnectorConfig @relation(fields: [connectorId], references: [id], onDelete: Cascade)
-
-  // Action details
-  action         String // 'created' | 'updated' | 'deleted' | 'executed' | 'tested' | 'health_check'
-  userId         String @map("user_id")
-  organizationId String @map("organization_id")
-
-  // Execution details
-  queryParams Json? @map("query_params") // ConnectorQueryParams
-  result      Json? // ExecutionResult summary
-
-  // Change tracking
-  changes Json? // Array of { field, oldValue, newValue }
-
-  // Metadata
-  metadata  Json?
-  timestamp DateTime @default(now())
-
-  @@index([connectorId])
-  @@index([userId])
-  @@index([organizationId])
-  @@index([action])
-  @@index([timestamp])
-  @@map("connector_audit_logs")
-}
 
 model MappingTemplate {
   id          String  @id @default(cuid())
@@ -2134,328 +2026,8 @@ enum MappingTemplateVisibility {
   @@map("mapping_template_visibility")
 }
 
-
-
 // ============================================================================
-// TASKS
-// ============================================================================
-
-// Task definitions and AI-powered code generation
-// ============================================================================
-
-model TaskDefinition {
-  id             String  @id @default(cuid())
-  name           String
-  description    String?
-  organizationId String  @map("organization_id")
-  projectId      String  @map("project_id")
-  domain         String  @default("development")
-
-  // Schema enforcement - Tasks MUST have input/output schemas
-  inputSchemaId  String @map("input_schema_id")
-  outputSchemaId String @map("output_schema_id")
-
-  inputSchema  FormSchema @relation("TaskInputSchema", fields: [inputSchemaId], references: [id])
-  outputSchema FormSchema @relation("TaskOutputSchema", fields: [outputSchemaId], references: [id])
-
-  // Generated Pydantic models (read-only, auto-generated from schemas)
-  generatedInputModel  String @map("generated_input_model") @db.Text // Python code for input Pydantic model
-  generatedOutputModel String @map("generated_output_model") @db.Text // Python code for output Pydantic model
-
-  // Dynamic function signature (user-defined)
-  functionName   String @default("process_data") @map("function_name") // e.g., "process_data", "transform", "validate"
-  parameterName  String @default("input_data") @map("parameter_name") // e.g., "input_data", "data", "request"
-  inputTypeName  String @default("InputType") @map("input_type_name") // e.g., "UserInput", "DataInput" (from schema name)
-  outputTypeName String @default("OutputType") @map("output_type_name") // e.g., "UserOutput", "ProcessedData" (from schema name)
-
-  // User's task logic (validated to enforce Pydantic usage)
-  taskCode String @db.Text // Complete Python task code (includes models + logic)
-
-  // Dependencies
-  baseImage         String @default("minimal-python") @map("base_image") // Base image: minimal-python, data-science, ml-gpu
-  extraDependencies Json   @default("[]") @map("extra_dependencies") // Additional pip packages: ["pandas==2.0.0"]
-
-  // Validation status
-  isValid          Boolean   @default(false) @map("is_valid")
-  validationErrors Json?     @map("validation_errors") // Array of validation error messages
-  lastValidated    DateTime? @map("last_validated")
-
-  // Flyte registration
-  flyteTaskId        String?                @unique @map("flyte_task_id") // Full Flyte ID after registration
-  registeredAt       DateTime?              @map("registered_at")
-  registrationStatus TaskRegistrationStatus @default(NOT_REGISTERED) @map("registration_status")
-  registrationError  String?                @map("registration_error") @db.Text
-  version            String                 @default("1.0.0")
-
-  // Metadata
-  createdBy String    @map("created_by")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
-
-  @@unique([organizationId, projectId, domain, name, version])
-  @@index([organizationId])
-  @@index([projectId])
-  @@index([inputSchemaId])
-  @@index([outputSchemaId])
-  @@index([isValid])
-  @@index([createdBy])
-  @@index([flyteTaskId])
-  @@index([registrationStatus])
-  @@index([deletedAt])
-  @@map("task_definitions")
-}
-
-model AIProviderKey {
-  id             String @id @default(cuid())
-  userId         String @map("user_id")
-  organizationId String @map("organization_id")
-
-  // Provider details
-  provider     String // "openai", "anthropic", "google", "azure_openai"
-  keyName      String  @map("key_name") // User-friendly name (e.g., "Work Account", "Personal")
-  encryptedKey String  @map("encrypted_key") @db.Text // AES-256 encrypted API key
-  model        String? // Preferred model (gpt-4-turbo, claude-3-5-sonnet, etc)
-
-  // Status
-  isDefault Boolean @default(false) @map("is_default")
-  isActive  Boolean @default(true) @map("is_active")
-
-  // Usage tracking
-  usageCount   Int       @default(0) @map("usage_count")
-  lastUsedAt   DateTime? @map("last_used_at")
-  totalCostUsd Decimal   @default(0) @map("total_cost_usd") @db.Decimal(10, 4)
-
-  // Connection test
-  lastTestedAt DateTime? @map("last_tested_at")
-  testStatus   String?   @map("test_status") // "success", "failed", "pending"
-  testError    String?   @map("test_error")
-
-  // Metadata
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  generationLogs AIGenerationLog[]
-
-  @@unique([userId, provider, keyName])
-  @@index([userId])
-  @@index([organizationId])
-  @@index([provider])
-  @@index([isDefault])
-  @@index([isActive])
-  @@map("ai_provider_keys")
-}
-
-model AIGenerationLog {
-  id             String  @id @default(cuid())
-  userId         String  @map("user_id")
-  organizationId String  @map("organization_id")
-  taskId         String? @map("task_id") // TaskDefinition ID if generation was for a task
-  providerKeyId  String  @map("provider_key_id")
-
-  // Generation details
-  generationType String @map("generation_type") // "generate", "explain", "improve", "refactor"
-  provider       String // "openai", "anthropic", "google", "azure_openai"
-  model          String // "gpt-4-turbo", "claude-3-5-sonnet", etc
-
-  // Input/Output
-  prompt          String  @db.Text // The full prompt sent to AI
-  userDescription String? @map("user_description") @db.Text // User's original request
-  generatedCode   String  @map("generated_code") @db.Text // AI-generated code
-
-  // Context (what was provided to AI)
-  inputSchema  Json?   @map("input_schema") // Input schema snapshot
-  outputSchema Json?   @map("output_schema") // Output schema snapshot
-  functionName String? @map("function_name") // Function name being generated
-  existingCode String? @map("existing_code") @db.Text // If improving existing code
-
-  // Usage metrics
-  tokensUsed       Int     @map("tokens_used")
-  promptTokens     Int?    @map("prompt_tokens")
-  completionTokens Int?    @map("completion_tokens")
-  costUsd          Decimal @map("cost_usd") @db.Decimal(10, 6)
-  generationTimeMs Int     @map("generation_time_ms") // milliseconds
-
-  // Result status
-  success      Boolean
-  errorMessage String? @map("error_message")
-  errorCode    String? @map("error_code")
-
-  // User feedback (optional)
-  wasAccepted  Boolean? @map("was_accepted") // Did user accept/insert the generated code?
-  userRating   Int?     @map("user_rating") // 1-5 stars
-  userFeedback String?  @map("user_feedback") @db.Text
-
-  // Metadata
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  providerKey AIProviderKey @relation(fields: [providerKeyId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([organizationId])
-  @@index([taskId])
-  @@index([providerKeyId])
-  @@index([provider])
-  @@index([generationType])
-  @@index([success])
-  @@index([createdAt])
-  @@index([userId, createdAt(sort: Desc)]) // For user's generation history
-  @@index([organizationId, createdAt(sort: Desc)]) // For org analytics
-  @@map("ai_generation_logs")
-}
-
-enum TaskRegistrationStatus {
-  NOT_REGISTERED
-  PENDING
-  PROCESSING
-  COMPLETED
-  FAILED
-
-  @@map("task_registration_status")
-}
-
-
-
-// ============================================================================
-// CONFIG
-// ============================================================================
-
-// Application, user, and plugin configuration
-// ============================================================================
-
-model UserSettings {
-  id     String @id @default(cuid())
-  userId String @unique @map("user_id")
-
-  // General Settings
-  autoSave         Boolean @default(true) @map("auto_save")
-  autoSaveInterval Int     @default(30) @map("auto_save_interval")
-  defaultView      String  @default("grid") @map("default_view") // grid, list, kanban
-  itemsPerPage     Int     @default(20) @map("items_per_page")
-
-  // Theme & Appearance
-  themeMode    String  @default("auto") // light, dark, auto
-  primaryColor String  @default("#1976d2") @map("primary_color")
-  compactMode  Boolean @default(false) @map("compact_mode")
-  animations   Boolean @default(true)
-
-  // Notifications
-  emailNotifications  Boolean @default(true) @map("email_notifications")
-  pushNotifications   Boolean @default(false) @map("push_notifications")
-  notifySchemaCreated Boolean @default(true) @map("notify_schema_created")
-  notifyAssignment    Boolean @default(true) @map("notify_assignment")
-  notifySubmission    Boolean @default(false) @map("notify_submission")
-
-  // Security
-  sessionTimeout        Int     @default(30) @map("session_timeout")
-  requirePasswordChange Boolean @default(false) @map("require_password_change")
-
-  // Editor Preferences
-  editorTheme  String  @default("vs-dark") @map("editor_theme")
-  fontSize     Int     @default(14) @map("font_size")
-  tabSize      Int     @default(2) @map("tab_size")
-  autoComplete Boolean @default(true) @map("auto_complete")
-  formatOnSave Boolean @default(true) @map("format_on_save")
-
-  // Advanced Options
-  debugMode            Boolean @default(false) @map("debug_mode")
-  cacheEnabled         Boolean @default(true) @map("cache_enabled")
-  experimentalFeatures Boolean @default(false) @map("experimental_features")
-
-  // Metadata
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("user_settings")
-}
-
-model AppConfig {
-  id          String  @id @default(cuid())
-  key         String  @unique // e.g., "ui.theme", "features.enableChat"
-  value       Json // Configuration value (can be any JSON type)
-  category    String // "ui", "features", "modules", "branding", etc.
-  description String? // Human-readable description
-  isSystem    Boolean @default(false) @map("is_system") // System vs user-defined
-  isPublic    Boolean @default(true) @map("is_public") // Can users override?
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([category])
-  @@index([isSystem])
-  @@map("app_config")
-}
-
-model UserConfig {
-  id     String @id @default(cuid())
-  userId String @map("user_id")
-  key    String // Configuration key (matches AppConfig.key)
-  value  Json // User's override value
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, key])
-  @@index([userId])
-  @@index([key])
-  @@map("user_config")
-}
-
-model OrganizationConfig {
-  id             String @id @default(cuid())
-  organizationId String @map("organization_id")
-  key            String // Configuration key (matches AppConfig.key)
-  value          Json // Organization's override value
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@unique([organizationId, key])
-  @@index([organizationId])
-  @@index([key])
-  @@map("organization_config")
-}
-
-model PluginConfig {
-  id       String  @id @default(cuid())
-  pluginId String  @unique @map("plugin_id") // e.g., "auth", "dashboard"
-  enabled  Boolean @default(true)
-  config   Json    @default("{}") // Plugin-specific configuration
-  priority Int     @default(0) // Load order priority
-
-  // Override settings
-  routes     Json? // Override plugin routes
-  navigation Json? // Override plugin navigation
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([enabled])
-  @@index([priority])
-  @@map("plugin_config")
-}
-
-
-
-// ============================================================================
-// BMAAS
-// ============================================================================
-
-// Bare Metal as a Service: instances, volumes, networks
+// BARE METAL AS A SERVICE (BMaaS) MODELS
 // ============================================================================
 
 model BmaasInstance {
@@ -2509,7 +2081,6 @@ model BmaasInstance {
   // Relations
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  creator      User               @relation("BmaasInstanceCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   flavor       BmaasFlavor        @relation(fields: [flavorId], references: [id])
   volumes      BmaasVolume[]
   networkPorts BmaasNetworkPort[]
@@ -2521,9 +2092,6 @@ model BmaasInstance {
   @@index([createdBy])
   @@index([openstackId])
   @@index([createdAt])
-  @@index([deletedAt])
-  @@index([organizationId, status])
-  @@index([projectId, status])
   @@map("bmaas_instances")
 }
 
@@ -2610,7 +2178,6 @@ model BmaasNetwork {
   // Relations
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  creator      User               @relation("BmaasNetworkCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   subnets      BmaasSubnet[]
   ports        BmaasNetworkPort[]
   usageRecords BmaasUsageRecord[]
@@ -2619,9 +2186,6 @@ model BmaasNetwork {
   @@index([projectId])
   @@index([status])
   @@index([openstackId])
-  @@index([createdBy])
-  @@index([deletedAt])
-  @@index([organizationId, status])
   @@map("bmaas_networks")
 }
 
@@ -2740,7 +2304,6 @@ model BmaasVolume {
   // Relations
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  creator      User               @relation("BmaasVolumeCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   instance     BmaasInstance?     @relation(fields: [instanceId], references: [id], onDelete: SetNull)
   usageRecords BmaasUsageRecord[]
 
@@ -2749,9 +2312,6 @@ model BmaasVolume {
   @@index([instanceId])
   @@index([status])
   @@index([openstackId])
-  @@index([createdBy])
-  @@index([deletedAt])
-  @@index([organizationId, status])
   @@map("bmaas_volumes")
 }
 
@@ -2760,7 +2320,7 @@ model BmaasBucket {
   organizationId String @map("organization_id")
   projectId      String @map("project_id")
 
-  name        String @unique // Bucket name (globally unique in Swift)
+  name        String // Bucket name (globally unique in Swift)
   description String?
 
   // OpenStack identifiers
@@ -2803,16 +2363,12 @@ model BmaasBucket {
   // Relations
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  creator      User               @relation("BmaasBucketCreator", fields: [createdBy], references: [id], onDelete: Restrict)
   usageRecords BmaasUsageRecord[]
 
   @@index([organizationId])
   @@index([projectId])
   @@index([status])
   @@index([openstackId])
-  @@index([createdBy])
-  @@index([deletedAt])
-  @@index([organizationId, status])
   @@map("bmaas_buckets")
 }
 
@@ -2824,7 +2380,6 @@ model BmaasUsageRecord {
   // Resource identification
   resourceType BmaasResourceType @map("resource_type")
   resourceId   String            @map("resource_id")
-  resourceName String            @map("resource_name") // Denormalized for historical records
   instanceId   String?           @map("instance_id")
   volumeId     String?           @map("volume_id")
   networkId    String?           @map("network_id")
@@ -2914,6 +2469,10 @@ model BmaasQuota {
   @@map("bmaas_quotas")
 }
 
+// ============================================================================
+// BMaaS ENUMS
+// ============================================================================
+
 enum BmaasInstanceStatus {
   PENDING
   BUILDING
@@ -2972,331 +2531,3 @@ enum BmaasResourceType {
 
   @@map("bmaas_resource_type")
 }
-
-
-
-// ============================================================================
-// API
-// ============================================================================
-
-// API keys, rate limiting, and webhooks
-// ============================================================================
-
-model ApiKey {
-  id     String @id @default(cuid())
-  userId String @map("user_id")
-
-  name        String
-  keyHash     String   @unique @map("key_hash") // Hashed API key
-  keyPrefix   String   @map("key_prefix") // First 8 chars for display
-  permissions String[] @default([]) // Scoped permissions
-
-  // Status
-  isActive  Boolean   @default(true) @map("is_active")
-  expiresAt DateTime? @map("expires_at")
-  revokedAt DateTime? @map("revoked_at")
-
-  // Usage tracking
-  lastUsedAt     DateTime? @map("last_used_at")
-  lastUsedIp     String?   @map("last_used_ip")
-  usageCount     BigInt    @default(0) @map("usage_count")
-  rateLimitTier  String    @default("standard") @map("rate_limit_tier")
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  usageLogs  ApiUsageLog[]
-  rateLimits ApiRateLimit[]
-
-  @@index([userId])
-  @@index([keyHash])
-  @@index([keyPrefix])
-  @@index([isActive])
-  @@index([expiresAt])
-  @@map("api_keys")
-}
-
-model ApiUsageLog {
-  id       String @id @default(cuid())
-  apiKeyId String @map("api_key_id")
-
-  endpoint   String
-  method     String
-  statusCode Int    @map("status_code")
-  ipAddress  String @map("ip_address")
-  userAgent  String @map("user_agent")
-  duration   Int // milliseconds
-  metadata   Json   @default("{}")
-
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-
-  @@index([apiKeyId])
-  @@index([endpoint])
-  @@index([createdAt])
-  @@index([statusCode])
-  @@map("api_usage_logs")
-}
-
-model ApiRateLimit {
-  id       String @id @default(cuid())
-  apiKeyId String @map("api_key_id")
-
-  // Rate limit configuration
-  limitType  String @map("limit_type") // endpoint, global, resource
-  resource   String? // Specific endpoint or resource
-  maxRequests Int     @map("max_requests")
-  windowMs   Int     @map("window_ms") // Time window in milliseconds
-
-  // Current usage
-  currentCount Int      @default(0) @map("current_count")
-  windowStart  DateTime @map("window_start")
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
-
-  @@unique([apiKeyId, limitType, resource])
-  @@index([apiKeyId])
-  @@index([windowStart])
-  @@map("api_rate_limits")
-}
-
-model Webhook {
-  id             String @id @default(cuid())
-  organizationId String @map("organization_id")
-
-  name        String
-  url         String
-  secret      String // For signature verification
-  events      String[] // Events to subscribe to
-  isActive    Boolean  @default(true) @map("is_active")
-  description String?
-
-  // Status
-  lastTriggeredAt DateTime? @map("last_triggered_at")
-  lastSuccessAt   DateTime? @map("last_success_at")
-  lastFailureAt   DateTime? @map("last_failure_at")
-  failureCount    Int       @default(0) @map("failure_count")
-
-  // Configuration
-  retryPolicy Json @default("{}") @map("retry_policy")
-  headers     Json @default("{}") // Custom headers
-  timeout     Int  @default(30000) // milliseconds
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  organization Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deliveries   WebhookDelivery[]
-
-  @@index([organizationId])
-  @@index([isActive])
-  @@map("webhooks")
-}
-
-model WebhookDelivery {
-  id        String @id @default(cuid())
-  webhookId String @map("webhook_id")
-
-  event       String
-  payload     Json
-  statusCode  Int?    @map("status_code")
-  response    Json?
-  error       String?
-  duration    Int? // milliseconds
-  attempt     Int     @default(1)
-  isSuccessful Boolean @default(false) @map("is_successful")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  sentAt    DateTime? @map("sent_at")
-
-  // Relations
-  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-
-  @@index([webhookId])
-  @@index([event])
-  @@index([isSuccessful])
-  @@index([createdAt])
-  @@map("webhook_deliveries")
-}
-
-
-// ============================================================================
-// NOTIFICATIONS
-// ============================================================================
-
-// Notification system: templates, notifications, deliveries
-// ============================================================================
-
-model NotificationTemplate {
-  id   String @id @default(cuid())
-  key  String @unique // e.g., "workflow.execution.failed"
-  name String
-
-  // Content templates
-  titleTemplate   String @map("title_template")
-  bodyTemplate    String @map("body_template")
-  emailSubject    String? @map("email_subject")
-  emailTemplate   String? @map("email_template")
-
-  // Configuration
-  category        NotificationCategory
-  severity        NotificationSeverity @default(INFO)
-  defaultChannels String[]             @default(["in_app"]) @map("default_channels") // in_app, email, sms, push
-  isActive        Boolean              @default(true) @map("is_active")
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  notifications Notification[]
-
-  @@index([key])
-  @@index([category])
-  @@index([isActive])
-  @@map("notification_templates")
-}
-
-model Notification {
-  id         String @id @default(cuid())
-  userId     String @map("user_id")
-  templateId String? @map("template_id")
-
-  // Content
-  title   String
-  body    String
-  linkUrl String? @map("link_url")
-  iconUrl String? @map("icon_url")
-
-  // Classification
-  category NotificationCategory
-  severity NotificationSeverity @default(INFO)
-  source   String // workflow, billing, security, marketplace, etc.
-
-  // Status
-  isRead       Boolean   @default(false) @map("is_read")
-  readAt       DateTime? @map("read_at")
-  isDismissed  Boolean   @default(false) @map("is_dismissed")
-  dismissedAt  DateTime? @map("dismissed_at")
-
-  // Context
-  metadata Json @default("{}")
-
-  createdAt DateTime @default(now()) @map("created_at")
-  expiresAt DateTime? @map("expires_at")
-
-  // Relations
-  user       User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  template   NotificationTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  deliveries NotificationDelivery[]
-
-  @@index([userId])
-  @@index([userId, isRead])
-  @@index([category])
-  @@index([createdAt])
-  @@index([expiresAt])
-  @@map("notifications")
-}
-
-model NotificationDelivery {
-  id             String @id @default(cuid())
-  notificationId String @map("notification_id")
-
-  channel      NotificationChannel // in_app, email, sms, push
-  recipient    String // email, phone, device_token
-  status       NotificationDeliveryStatus @default(PENDING)
-  sentAt       DateTime?                  @map("sent_at")
-  deliveredAt  DateTime?                  @map("delivered_at")
-  failedAt     DateTime?                  @map("failed_at")
-  error        String?
-  retryCount   Int                        @default(0) @map("retry_count")
-  externalId   String?                    @map("external_id") // Provider's message ID
-
-  metadata  Json     @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  // Relations
-  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-
-  @@index([notificationId])
-  @@index([channel])
-  @@index([status])
-  @@index([sentAt])
-  @@map("notification_deliveries")
-}
-
-model NotificationPreference {
-  id     String @id @default(cuid())
-  userId String @map("user_id")
-
-  category NotificationCategory
-  channels String[] @default(["in_app"]) // Which channels to use for this category
-  enabled  Boolean  @default(true)
-
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, category])
-  @@index([userId])
-  @@map("notification_preferences")
-}
-
-enum NotificationCategory {
-  WORKFLOW
-  BILLING
-  SECURITY
-  MARKETPLACE
-  SYSTEM
-  TEAM
-  FEATURE
-  BMAAS
-
-  @@map("notification_category")
-}
-
-enum NotificationSeverity {
-  INFO
-  WARNING
-  ERROR
-  CRITICAL
-
-  @@map("notification_severity")
-}
-
-enum NotificationChannel {
-  IN_APP
-  EMAIL
-  SMS
-  PUSH
-  SLACK
-  WEBHOOK
-
-  @@map("notification_channel")
-}
-
-enum NotificationDeliveryStatus {
-  PENDING
-  SENT
-  DELIVERED
-  FAILED
-  BOUNCED
-
-  @@map("notification_delivery_status")
-}
-
-

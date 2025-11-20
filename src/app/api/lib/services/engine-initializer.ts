@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../utils/logger';
-import type { EngineManager } from '../../../../engine';
+import type { EngineManager } from '@app/engine';
 
 let engineManager: EngineManager | null = null;
 
@@ -16,7 +16,7 @@ export async function initializeEngineServices(): Promise<void> {
     logger.info('Initializing engine gRPC services');
 
     // Dynamic import to ensure module resolution at runtime
-    const { createEngineServicesFromEnv } = await import('../../../../engine');
+    const { createEngineServicesFromEnv } = await import('@app/engine');
 
     // Create services from environment configuration
     const manager = createEngineServicesFromEnv();

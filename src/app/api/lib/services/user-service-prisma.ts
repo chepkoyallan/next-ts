@@ -1,10 +1,25 @@
 // User service for database operations using Prisma
+// Updated for Schema v2.0 with modular user model
 import bcrypt from 'bcryptjs';
 import { Prisma } from '@prisma/client';
 
 import { logger } from '../utils/logger';
 import { prisma } from '../../../../lib/prisma';
 import { PaginationParams, PaginatedResponse } from '../types/api';
+import {
+  standardUserInclude,
+  flattenUser,
+  createUserWithProfile,
+  updateUserProfile,
+  enable2FA,
+  disable2FA,
+  verify2FACode,
+  handleFailedLogin,
+  resetFailedLogins,
+  isAccountLocked,
+  updateLastLogin,
+  type FlatUser,
+} from '../utils/user-helpers';
 
 export interface User {
   id: string;
@@ -16,7 +31,7 @@ export interface User {
   passwordHash: string;
   createdAt: string;
   updatedAt?: string;
-  // Extended profile fields
+  // Extended profile fields (flattened from nested models)
   phoneNumber?: string;
   country?: string;
   address?: string;
@@ -37,6 +52,21 @@ export interface CreateUserData {
   name: string;
   password: string;
   role?: 'user' | 'admin' | 'moderator';
+  profileData?: {
+    photoURL?: string;
+    phoneNumber?: string;
+    country?: string;
+    address?: string;
+    state?: string;
+    city?: string;
+    zipCode?: string;
+    about?: string;
+    isPublic?: boolean;
+    bio?: string;
+    website?: string;
+    company?: string;
+    timezone?: string;
+  };
 }
 
 export interface UpdateUserData {
@@ -57,8 +87,12 @@ export interface UpdateProfileData {
   about?: string;
   isPublic?: boolean;
   photoURL?: string;
-  socialLinks?: string; // JSON string
-  notificationPreferences?: string; // JSON string
+  bio?: string;
+  website?: string;
+  company?: string;
+  timezone?: string;
+  socialLinks?: string; // JSON string for backward compatibility
+  notificationPreferences?: string; // JSON string for backward compatibility
   lastLoginAt?: Date;
   lastLoginIp?: string;
 }
@@ -74,60 +108,15 @@ export class UserService {
           email,
           deletedAt: null,
         },
-        include: {
-          userRoles: {
-            include: {
-              role: {
-                include: {
-                  rolePermissions: {
-                    include: {
-                      permission: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
+        include: standardUserInclude,
       });
 
       if (!user) {
         return null;
       }
 
-      // Extract roles and permissions
-      const roles = user.userRoles.map((ur: any) => ur.role.name);
-      const permissions = user.userRoles.flatMap((ur: any) =>
-        ur.role.rolePermissions.map(
-          (rp: any) => `${rp.permission.resource}:${rp.permission.action}`
-        )
-      );
-
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: (roles[0] as 'user' | 'admin' | 'moderator') || 'user', // Use first role for backward compatibility
-        roles,
-        permissions,
-        passwordHash: user.passwordHash,
-        createdAt: user.createdAt.toISOString(),
-        updatedAt: user.updatedAt?.toISOString(),
-        // Include extended profile fields
-        phoneNumber: user.phoneNumber,
-        country: user.country,
-        address: user.address,
-        state: user.state,
-        city: user.city,
-        zipCode: user.zipCode,
-        about: user.about,
-        isPublic: user.isPublic,
-        photoURL: user.photoURL,
-        socialLinks: user.socialLinks,
-        notificationPreferences: user.notificationPreferences,
-        emailVerified: user.emailVerified,
-        twoFactorEnabled: user.twoFactorEnabled,
-      } as any;
+      // Use helper to flatten nested structure
+      return flattenUser(user) as any;
     } catch (error) {
       logger.error('Failed to find user by email', error as Error, { email });
       throw new Error('Failed to find user');
@@ -144,60 +133,15 @@ export class UserService {
           id,
           deletedAt: null,
         },
-        include: {
-          userRoles: {
-            include: {
-              role: {
-                include: {
-                  rolePermissions: {
-                    include: {
-                      permission: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
+        include: standardUserInclude,
       });
 
       if (!user) {
         return null;
       }
 
-      // Extract roles and permissions
-      const roles = user.userRoles.map((ur: any) => ur.role.name);
-      const permissions = user.userRoles.flatMap((ur: any) =>
-        ur.role.rolePermissions.map(
-          (rp: any) => `${rp.permission.resource}:${rp.permission.action}`
-        )
-      );
-
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: (roles[0] as 'user' | 'admin' | 'moderator') || 'user',
-        roles,
-        permissions,
-        passwordHash: user.passwordHash,
-        createdAt: user.createdAt.toISOString(),
-        updatedAt: user.updatedAt?.toISOString(),
-        // Include extended profile fields
-        phoneNumber: user.phoneNumber,
-        country: user.country,
-        address: user.address,
-        state: user.state,
-        city: user.city,
-        zipCode: user.zipCode,
-        about: user.about,
-        isPublic: user.isPublic,
-        photoURL: user.photoURL,
-        socialLinks: user.socialLinks,
-        notificationPreferences: user.notificationPreferences,
-        emailVerified: user.emailVerified,
-        twoFactorEnabled: user.twoFactorEnabled,
-      } as any;
+      // Use helper to flatten nested structure
+      return flattenUser(user) as any;
     } catch (error) {
       logger.error('Failed to find user by ID', error as Error, { id });
       throw new Error('Failed to find user');
@@ -205,42 +149,21 @@ export class UserService {
   }
 
   /**
-   * Create a new user
+   * Create a new user with profile and security setup
    */
   static async create(data: CreateUserData): Promise<User> {
     try {
-      // Hash password
-      const saltRounds = parseInt(process.env.BCRYPT_ROUNDS || '12', 10);
-      const hashedPassword = await bcrypt.hash(data.password, saltRounds);
-
-      // Create user
-      const newUser = await prisma.user.create({
-        data: {
-          email: data.email,
-          name: data.name,
-          passwordHash: hashedPassword,
-          emailVerified: false,
-        },
+      // Use helper to create user with nested records
+      const newUser = await createUserWithProfile({
+        email: data.email,
+        name: data.name,
+        password: data.password,
+        profileData: data.profileData,
+        role: data.role,
       });
 
-      // Assign default role
-      const defaultRoleName = data.role || 'user';
-      const defaultRole = await prisma.role.findUnique({
-        where: { name: defaultRoleName },
-      });
-
-      if (defaultRole) {
-        await prisma.userRole.create({
-          data: {
-            userId: newUser.id,
-            roleId: defaultRole.id,
-            assignedBy: 'system',
-          },
-        });
-      }
-
-      // Return user with role and permissions
-      return (await UserService.findById(newUser.id)) as User;
+      // Return flattened user
+      return flattenUser(newUser) as any;
     } catch (error) {
       logger.error('Failed to create user', error as Error, { email: data.email });
 
@@ -253,7 +176,7 @@ export class UserService {
   }
 
   /**
-   * Update user
+   * Update user core fields and role
    */
   static async update(id: string, data: UpdateUserData): Promise<User> {
     try {
@@ -349,43 +272,17 @@ export class UserService {
           where,
           skip,
           take: limit,
-          include: {
-            userRoles: {
-              include: {
-                role: {
-                  include: {
-                    rolePermissions: {
-                      include: {
-                        permission: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
+          include: standardUserInclude,
           orderBy: { createdAt: 'desc' },
         }),
         prisma.user.count({ where }),
       ]);
 
       const data = users.map((user: any) => {
-        const roles = user.userRoles.map((ur: any) => ur.role.name);
-        const permissions = user.userRoles.flatMap((ur: any) =>
-          ur.role.rolePermissions.map(
-            (rp: any) => `${rp.permission.resource}:${rp.permission.action}`
-          )
-        );
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: (roles[0] as 'user' | 'admin' | 'moderator') || 'user',
-          permissions,
-          createdAt: user.createdAt.toISOString(),
-          updatedAt: user.updatedAt?.toISOString(),
-        };
+        const flattened = flattenUser(user);
+        // Remove password hash from response
+        const { passwordHash, ...userWithoutPassword } = flattened;
+        return userWithoutPassword;
       });
 
       const totalPages = Math.ceil(total / limit);
@@ -425,167 +322,48 @@ export class UserService {
   }
 
   /**
-   * Update user profile with extended fields
+   * Update user profile with extended fields (uses new nested profile model)
    */
   static async updateProfile(userId: string, data: UpdateProfileData): Promise<User | null> {
     try {
-      // Start with basic fields that definitely exist
-      const basicUpdateData: any = {
-        updatedAt: new Date(),
-      };
-
-      // Add basic fields that should exist in any user table
+      // Handle basic user fields (name, email, lastLogin)
+      const basicUpdateData: any = {};
       if (data.name) basicUpdateData.name = data.name;
       if (data.email) basicUpdateData.email = data.email;
       if (data.lastLoginAt) basicUpdateData.lastLoginAt = data.lastLoginAt;
       if (data.lastLoginIp) basicUpdateData.lastLoginIp = data.lastLoginIp;
 
-      // Try to update with basic fields first
-      let updatedUser;
-      try {
-        updatedUser = await prisma.user.update({
-          where: {
-            id: userId,
-            deletedAt: null,
-          },
+      // Update basic fields if any
+      if (Object.keys(basicUpdateData).length > 0) {
+        await prisma.user.update({
+          where: { id: userId, deletedAt: null },
           data: basicUpdateData,
-          include: {
-            userRoles: {
-              include: {
-                role: {
-                  include: {
-                    rolePermissions: {
-                      include: {
-                        permission: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
         });
-
-        // If basic update succeeded, try to update extended fields
-        const extendedUpdateData: any = {};
-        let hasExtendedFields = false;
-
-        if (data.phoneNumber !== undefined) {
-          extendedUpdateData.phoneNumber = data.phoneNumber;
-          hasExtendedFields = true;
-        }
-        if (data.country !== undefined) {
-          extendedUpdateData.country = data.country;
-          hasExtendedFields = true;
-        }
-        if (data.address !== undefined) {
-          extendedUpdateData.address = data.address;
-          hasExtendedFields = true;
-        }
-        if (data.state !== undefined) {
-          extendedUpdateData.state = data.state;
-          hasExtendedFields = true;
-        }
-        if (data.city !== undefined) {
-          extendedUpdateData.city = data.city;
-          hasExtendedFields = true;
-        }
-        if (data.zipCode !== undefined) {
-          extendedUpdateData.zipCode = data.zipCode;
-          hasExtendedFields = true;
-        }
-        if (data.about !== undefined) {
-          extendedUpdateData.about = data.about;
-          hasExtendedFields = true;
-        }
-        if (data.isPublic !== undefined) {
-          extendedUpdateData.isPublic = data.isPublic;
-          hasExtendedFields = true;
-        }
-        if (data.photoURL !== undefined) {
-          extendedUpdateData.photoURL = data.photoURL;
-          hasExtendedFields = true;
-        }
-        if (data.socialLinks !== undefined) {
-          extendedUpdateData.socialLinks = data.socialLinks;
-          hasExtendedFields = true;
-        }
-        if (data.notificationPreferences !== undefined) {
-          extendedUpdateData.notificationPreferences = data.notificationPreferences;
-          hasExtendedFields = true;
-        }
-
-        // Try to update extended fields if any exist
-        if (hasExtendedFields) {
-          try {
-            updatedUser = await prisma.user.update({
-              where: { id: userId },
-              data: extendedUpdateData,
-              include: {
-                userRoles: {
-                  include: {
-                    role: {
-                      include: {
-                        rolePermissions: {
-                          include: {
-                            permission: true,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            });
-          } catch (extendedError) {
-            logger.warn('Extended profile fields not available in database schema', {
-              error: extendedError,
-              userId,
-              attemptedFields: Object.keys(extendedUpdateData),
-            });
-            // Continue with basic update result
-          }
-        }
-      } catch (basicError) {
-        logger.error('Failed to update basic user profile fields', basicError as Error, { userId });
-        throw basicError;
       }
 
-      if (!updatedUser) {
-        return null;
+      // Handle profile fields using helper
+      const profileData: any = {};
+      if (data.phoneNumber !== undefined) profileData.phoneNumber = data.phoneNumber;
+      if (data.country !== undefined) profileData.country = data.country;
+      if (data.address !== undefined) profileData.address = data.address;
+      if (data.state !== undefined) profileData.state = data.state;
+      if (data.city !== undefined) profileData.city = data.city;
+      if (data.zipCode !== undefined) profileData.zipCode = data.zipCode;
+      if (data.about !== undefined) profileData.about = data.about;
+      if (data.isPublic !== undefined) profileData.isPublic = data.isPublic;
+      if (data.photoURL !== undefined) profileData.photoURL = data.photoURL;
+      if (data.bio !== undefined) profileData.bio = data.bio;
+      if (data.website !== undefined) profileData.website = data.website;
+      if (data.company !== undefined) profileData.company = data.company;
+      if (data.timezone !== undefined) profileData.timezone = data.timezone;
+
+      // Update profile if any profile fields
+      if (Object.keys(profileData).length > 0) {
+        await updateUserProfile(userId, profileData);
       }
 
-      // Transform to User interface
-      const roles = updatedUser.userRoles.map((ur: any) => ur.role.name);
-      const permissions = updatedUser.userRoles.flatMap((ur: any) =>
-        ur.role.rolePermissions.map(
-          (rp: any) => `${rp.permission.resource}:${rp.permission.action}`
-        )
-      );
-
-      return {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        name: updatedUser.name,
-        role: (roles[0] as 'user' | 'admin' | 'moderator') || 'user',
-        roles,
-        permissions,
-        passwordHash: updatedUser.passwordHash,
-        createdAt: updatedUser.createdAt.toISOString(),
-        updatedAt: updatedUser.updatedAt.toISOString(),
-        // Include profile fields
-        phoneNumber: updatedUser.phoneNumber,
-        country: updatedUser.country,
-        address: updatedUser.address,
-        state: updatedUser.state,
-        city: updatedUser.city,
-        zipCode: updatedUser.zipCode,
-        about: updatedUser.about,
-        isPublic: updatedUser.isPublic,
-        photoURL: updatedUser.photoURL,
-        socialLinks: updatedUser.socialLinks,
-        notificationPreferences: updatedUser.notificationPreferences,
-      } as any;
+      // Return updated user
+      return await UserService.findById(userId);
     } catch (error) {
       logger.error('Failed to update user profile', error as Error, { userId });
       throw error;
@@ -602,19 +380,15 @@ export class UserService {
     backupCodes?: string[]
   ): Promise<void> {
     try {
-      await prisma.user.update({
-        where: {
-          id: userId,
-          deletedAt: null,
-        },
-        data: {
-          twoFactorEnabled: enabled,
-          twoFactorSecret: enabled ? secret : null,
-          twoFactorBackupCodes:
-            enabled && backupCodes ? JSON.stringify(backupCodes) : Prisma.JsonNull,
-          updatedAt: new Date(),
-        },
-      });
+      if (enabled && secret && backupCodes) {
+        await enable2FA(userId, secret, backupCodes);
+        logger.info('2FA enabled successfully', { userId });
+      } else if (!enabled) {
+        await disable2FA(userId);
+        logger.info('2FA disabled successfully', { userId });
+      } else {
+        throw new Error('Invalid 2FA update parameters');
+      }
     } catch (error) {
       logger.error('Failed to update two-factor authentication', error as Error, { userId });
       throw error;
@@ -626,18 +400,8 @@ export class UserService {
    */
   static async disableTwoFactor(userId: string): Promise<void> {
     try {
-      await prisma.user.update({
-        where: {
-          id: userId,
-          deletedAt: null,
-        },
-        data: {
-          twoFactorEnabled: false,
-          twoFactorSecret: null,
-          twoFactorBackupCodes: Prisma.JsonNull,
-          updatedAt: new Date(),
-        },
-      });
+      await disable2FA(userId);
+      logger.info('2FA disabled successfully', { userId });
     } catch (error) {
       logger.error('Failed to disable two-factor authentication', error as Error, { userId });
       throw error;
@@ -726,21 +490,9 @@ export class UserService {
   /**
    * Enable 2FA with secret and backup codes
    */
-  static async enableTwoFactor(userId: string, secret: string, backupCodes: string): Promise<void> {
+  static async enableTwoFactor(userId: string, secret: string, backupCodes: string[]): Promise<void> {
     try {
-      await prisma.user.update({
-        where: {
-          id: userId,
-          deletedAt: null,
-        },
-        data: {
-          twoFactorEnabled: true,
-          twoFactorSecret: secret,
-          twoFactorBackupCodes: backupCodes as any,
-          updatedAt: new Date(),
-        },
-      });
-
+      await enable2FA(userId, secret, backupCodes);
       logger.info('2FA enabled successfully', { userId });
     } catch (error) {
       logger.error('Failed to enable 2FA', error as Error, { userId });
@@ -751,23 +503,47 @@ export class UserService {
   /**
    * Update 2FA backup codes (e.g., after one is used)
    */
-  static async updateTwoFactorBackupCodes(userId: string, backupCodes: string): Promise<void> {
+  static async updateTwoFactorBackupCodes(userId: string, backupCodes: string[]): Promise<void> {
     try {
-      await prisma.user.update({
-        where: {
-          id: userId,
-          deletedAt: null,
-        },
-        data: {
-          twoFactorBackupCodes: backupCodes as any,
-          updatedAt: new Date(),
-        },
+      // Get user security record
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { security: true },
+      });
+
+      if (!user?.security) {
+        throw new Error('User security record not found');
+      }
+
+      // Delete old backup codes
+      await prisma.twoFactorBackupCode.deleteMany({
+        where: { userSecurityId: user.security.id },
+      });
+
+      // Create new backup codes
+      await prisma.twoFactorBackupCode.createMany({
+        data: backupCodes.map((code) => ({
+          userSecurityId: user.security!.id,
+          code,
+        })),
       });
 
       logger.info('2FA backup codes updated', { userId });
     } catch (error) {
       logger.error('Failed to update 2FA backup codes', error as Error, { userId });
       throw error;
+    }
+  }
+
+  /**
+   * Verify 2FA code (TOTP or backup code)
+   */
+  static async verify2FACode(userId: string, code: string, speakeasy: any): Promise<{ valid: boolean; usedBackupCode?: boolean }> {
+    try {
+      return await verify2FACode(userId, code, speakeasy);
+    } catch (error) {
+      logger.error('Failed to verify 2FA code', error as Error, { userId });
+      return { valid: false };
     }
   }
 
@@ -791,6 +567,58 @@ export class UserService {
     } catch (error) {
       logger.error('Failed to verify email', error as Error, { userId });
       throw error;
+    }
+  }
+
+  /**
+   * Update user's last login info
+   */
+  static async updateLastLogin(userId: string, ipAddress?: string): Promise<void> {
+    try {
+      await updateLastLogin(userId, ipAddress);
+      logger.info('Last login updated', { userId });
+    } catch (error) {
+      logger.error('Failed to update last login', error as Error, { userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Handle failed login attempt with account lockout
+   */
+  static async handleFailedLogin(userId: string): Promise<{ failedAttempts: number; accountLocked: boolean; lockedUntil?: Date }> {
+    try {
+      const result = await handleFailedLogin(userId);
+      logger.warn('Failed login attempt recorded', { userId, ...result });
+      return result;
+    } catch (error) {
+      logger.error('Failed to handle failed login', error as Error, { userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Reset failed login attempts after successful login
+   */
+  static async resetFailedLogins(userId: string): Promise<void> {
+    try {
+      await resetFailedLogins(userId);
+      logger.info('Failed login attempts reset', { userId });
+    } catch (error) {
+      logger.error('Failed to reset failed login attempts', error as Error, { userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if account is currently locked
+   */
+  static async isAccountLocked(userId: string): Promise<boolean> {
+    try {
+      return await isAccountLocked(userId);
+    } catch (error) {
+      logger.error('Failed to check account lock status', error as Error, { userId });
+      return false;
     }
   }
 }

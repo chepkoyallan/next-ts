@@ -1,0 +1,122 @@
+// Multi-tenancy: organizations, members, invitations
+// ============================================================================
+
+model Organization {
+  id          String             @id @default(cuid())
+  name        String
+  slug        String             @unique
+  description String?
+  logoUrl     String?            @map("logo_url")
+  website     String?
+  industry    String?
+  size        String? // SMALL, MEDIUM, LARGE, ENTERPRISE
+  status      OrganizationStatus @default(ACTIVE)
+  ownerId     String             @map("owner_id")
+
+  // Settings and metadata
+  settings Json @default("{}") // SSO, branding, security policies
+  metadata Json @default("{}")
+
+  // Timestamps
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  owner                User                     @relation("OrganizationOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  billingAccounts      BillingAccount[]
+  projects             Project[]
+  members              OrganizationMember[]
+  invitations          OrganizationInvitation[]
+  formSchemas          FormSchema[]
+  formAssignments      FormAssignment[]
+  formSubmissions      FormSubmission[]
+  featureFlagOverrides FeatureFlagOverride[]
+  connectors           ConnectorConfig[]
+  bmaasInstances       BmaasInstance[]
+  bmaasNetworks        BmaasNetwork[]
+  bmaasVolumes         BmaasVolume[]
+  bmaasBuckets         BmaasBucket[]
+  bmaasUsageRecords    BmaasUsageRecord[]
+  bmaasQuota           BmaasQuota?
+  featureUsage         FeatureUsage[]
+  webhooks             Webhook[]
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([slug])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  userId         String           @map("user_id")
+  role           OrganizationRole @default(MEMBER)
+  invitedBy      String?          @map("invited_by")
+  joinedAt       DateTime         @default(now()) @map("joined_at")
+  leftAt         DateTime?        @map("left_at")
+  isActive       Boolean          @default(true) @map("is_active")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@index([isActive])
+  @@map("organization_members")
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  email          String
+  role           OrganizationRole @default(MEMBER)
+  token          String           @unique
+  invitedBy      String           @map("invited_by")
+  message        String?
+  status         InvitationStatus @default(PENDING)
+  expiresAt      DateTime         @map("expires_at")
+  acceptedAt     DateTime?        @map("accepted_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([token])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("organization_invitations")
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+
+  @@map("organization_role")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_DELETION
+  DELETED
+
+  @@map("organization_status")
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+
+  @@map("invitation_status")
+}
+

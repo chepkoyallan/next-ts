@@ -1,0 +1,178 @@
+// Task definitions and AI-powered code generation
+// ============================================================================
+
+model TaskDefinition {
+  id             String  @id @default(cuid())
+  name           String
+  description    String?
+  organizationId String  @map("organization_id")
+  projectId      String  @map("project_id")
+  domain         String  @default("development")
+
+  // Schema enforcement - Tasks MUST have input/output schemas
+  inputSchemaId  String @map("input_schema_id")
+  outputSchemaId String @map("output_schema_id")
+
+  inputSchema  FormSchema @relation("TaskInputSchema", fields: [inputSchemaId], references: [id])
+  outputSchema FormSchema @relation("TaskOutputSchema", fields: [outputSchemaId], references: [id])
+
+  // Generated Pydantic models (read-only, auto-generated from schemas)
+  generatedInputModel  String @map("generated_input_model") @db.Text // Python code for input Pydantic model
+  generatedOutputModel String @map("generated_output_model") @db.Text // Python code for output Pydantic model
+
+  // Dynamic function signature (user-defined)
+  functionName   String @default("process_data") @map("function_name") // e.g., "process_data", "transform", "validate"
+  parameterName  String @default("input_data") @map("parameter_name") // e.g., "input_data", "data", "request"
+  inputTypeName  String @default("InputType") @map("input_type_name") // e.g., "UserInput", "DataInput" (from schema name)
+  outputTypeName String @default("OutputType") @map("output_type_name") // e.g., "UserOutput", "ProcessedData" (from schema name)
+
+  // User's task logic (validated to enforce Pydantic usage)
+  taskCode String @db.Text // Complete Python task code (includes models + logic)
+
+  // Dependencies
+  baseImage         String @default("minimal-python") @map("base_image") // Base image: minimal-python, data-science, ml-gpu
+  extraDependencies Json   @default("[]") @map("extra_dependencies") // Additional pip packages: ["pandas==2.0.0"]
+
+  // Validation status
+  isValid          Boolean   @default(false) @map("is_valid")
+  validationErrors Json?     @map("validation_errors") // Array of validation error messages
+  lastValidated    DateTime? @map("last_validated")
+
+  // Flyte registration
+  flyteTaskId        String?                @unique @map("flyte_task_id") // Full Flyte ID after registration
+  registeredAt       DateTime?              @map("registered_at")
+  registrationStatus TaskRegistrationStatus @default(NOT_REGISTERED) @map("registration_status")
+  registrationError  String?                @map("registration_error") @db.Text
+  version            String                 @default("1.0.0")
+
+  // Metadata
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([organizationId, projectId, domain, name, version])
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([inputSchemaId])
+  @@index([outputSchemaId])
+  @@index([isValid])
+  @@index([createdBy])
+  @@index([flyteTaskId])
+  @@index([registrationStatus])
+  @@index([deletedAt])
+  @@map("task_definitions")
+}
+
+model AIProviderKey {
+  id             String @id @default(cuid())
+  userId         String @map("user_id")
+  organizationId String @map("organization_id")
+
+  // Provider details
+  provider     String // "openai", "anthropic", "google", "azure_openai"
+  keyName      String  @map("key_name") // User-friendly name (e.g., "Work Account", "Personal")
+  encryptedKey String  @map("encrypted_key") @db.Text // AES-256 encrypted API key
+  model        String? // Preferred model (gpt-4-turbo, claude-3-5-sonnet, etc)
+
+  // Status
+  isDefault Boolean @default(false) @map("is_default")
+  isActive  Boolean @default(true) @map("is_active")
+
+  // Usage tracking
+  usageCount   Int       @default(0) @map("usage_count")
+  lastUsedAt   DateTime? @map("last_used_at")
+  totalCostUsd Decimal   @default(0) @map("total_cost_usd") @db.Decimal(10, 4)
+
+  // Connection test
+  lastTestedAt DateTime? @map("last_tested_at")
+  testStatus   String?   @map("test_status") // "success", "failed", "pending"
+  testError    String?   @map("test_error")
+
+  // Metadata
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  generationLogs AIGenerationLog[]
+
+  @@unique([userId, provider, keyName])
+  @@index([userId])
+  @@index([organizationId])
+  @@index([provider])
+  @@index([isDefault])
+  @@index([isActive])
+  @@map("ai_provider_keys")
+}
+
+model AIGenerationLog {
+  id             String  @id @default(cuid())
+  userId         String  @map("user_id")
+  organizationId String  @map("organization_id")
+  taskId         String? @map("task_id") // TaskDefinition ID if generation was for a task
+  providerKeyId  String  @map("provider_key_id")
+
+  // Generation details
+  generationType String @map("generation_type") // "generate", "explain", "improve", "refactor"
+  provider       String // "openai", "anthropic", "google", "azure_openai"
+  model          String // "gpt-4-turbo", "claude-3-5-sonnet", etc
+
+  // Input/Output
+  prompt          String  @db.Text // The full prompt sent to AI
+  userDescription String? @map("user_description") @db.Text // User's original request
+  generatedCode   String  @map("generated_code") @db.Text // AI-generated code
+
+  // Context (what was provided to AI)
+  inputSchema  Json?   @map("input_schema") // Input schema snapshot
+  outputSchema Json?   @map("output_schema") // Output schema snapshot
+  functionName String? @map("function_name") // Function name being generated
+  existingCode String? @map("existing_code") @db.Text // If improving existing code
+
+  // Usage metrics
+  tokensUsed       Int     @map("tokens_used")
+  promptTokens     Int?    @map("prompt_tokens")
+  completionTokens Int?    @map("completion_tokens")
+  costUsd          Decimal @map("cost_usd") @db.Decimal(10, 6)
+  generationTimeMs Int     @map("generation_time_ms") // milliseconds
+
+  // Result status
+  success      Boolean
+  errorMessage String? @map("error_message")
+  errorCode    String? @map("error_code")
+
+  // User feedback (optional)
+  wasAccepted  Boolean? @map("was_accepted") // Did user accept/insert the generated code?
+  userRating   Int?     @map("user_rating") // 1-5 stars
+  userFeedback String?  @map("user_feedback") @db.Text
+
+  // Metadata
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  providerKey AIProviderKey @relation(fields: [providerKeyId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([taskId])
+  @@index([providerKeyId])
+  @@index([provider])
+  @@index([generationType])
+  @@index([success])
+  @@index([createdAt])
+  @@index([userId, createdAt(sort: Desc)]) // For user's generation history
+  @@index([organizationId, createdAt(sort: Desc)]) // For org analytics
+  @@map("ai_generation_logs")
+}
+
+enum TaskRegistrationStatus {
+  NOT_REGISTERED
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@map("task_registration_status")
+}
+

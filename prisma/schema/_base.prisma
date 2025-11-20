@@ -1,0 +1,15 @@
+// Prisma Schema v2.0 - Production-Ready Modular Architecture
+// Built from 17 modular domain files for maintainability
+// Base Configuration: generator, datasource, and core settings
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // directUrl = env("DIRECT_DATABASE_URL") // Commented out for Accelerate-only usage
+}

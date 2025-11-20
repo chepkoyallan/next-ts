@@ -77,23 +77,25 @@ const disable2FAHandler = createSingleMethodHandler(
         );
       }
 
-      let verified = false;
-
-      if (code) {
-        // Verify TOTP code
-        verified = speakeasy.totp.verify({
-          secret: (user as any).twoFactorSecret,
-          encoding: 'base32',
-          token: code,
-          window: 2,
-        });
-      } else if (backupCode && (user as any).twoFactorBackupCodes) {
-        // Verify backup code
-        const backupCodes = JSON.parse((user as any).twoFactorBackupCodes);
-        verified = backupCodes.includes(backupCode.toUpperCase());
+      // Verify TOTP code or backup code using helper
+      const codeToVerify = code || backupCode;
+      if (!codeToVerify) {
+        return createErrorResponse(
+          'VALIDATION_ERROR',
+          {
+            message: 'Either 2FA code or backup code is required',
+          },
+          context.requestId
+        );
       }
 
-      if (!verified) {
+      const verificationResult = await (UserService as any).verify2FACode(
+        user.id,
+        codeToVerify,
+        speakeasy
+      );
+
+      if (!verificationResult.valid) {
         return createErrorResponse(
           'UNAUTHORIZED',
           {

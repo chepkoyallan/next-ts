@@ -1,0 +1,518 @@
+// Bare Metal as a Service: instances, volumes, networks
+// ============================================================================
+
+model BmaasInstance {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  projectId      String @map("project_id")
+
+  // Instance details
+  name        String
+  description String?
+  flavorId    String  @map("flavor_id")
+
+  // OpenStack identifiers
+  openstackId        String  @unique @map("openstack_id") // Nova instance UUID
+  openstackProjectId String? @map("openstack_project_id") // OpenStack project UUID
+
+  // Configuration
+  imageId          String? @map("image_id")
+  imageName        String? @map("image_name")
+  hypervisor       String? // KVM, XEN, VMWARE_ESXI, IRONIC
+  availabilityZone String? @map("availability_zone")
+
+  // Status
+  status     BmaasInstanceStatus @default(PENDING)
+  powerState String?             @map("power_state") // RUNNING, PAUSED, SUSPENDED, SHUTOFF
+  taskState  String?             @map("task_state") // spawning, migrating, etc.
+
+  // Network configuration
+  publicIp     String? @map("public_ip")
+  privateIp    String? @map("private_ip")
+  floatingIpId String? @map("floating_ip_id")
+
+  // Metadata
+  metadata Json     @default("{}")
+  tags     String[] @default([])
+
+  // Billing
+  hourlyRate Decimal @map("hourly_rate") @db.Decimal(10, 4)
+  currency   String  @default("USD")
+
+  // Lifecycle timestamps
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // OpenStack lifecycle
+  launchedAt   DateTime? @map("launched_at")
+  terminatedAt DateTime? @map("terminated_at")
+
+  // Relations
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User               @relation("BmaasInstanceCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  flavor       BmaasFlavor        @relation(fields: [flavorId], references: [id])
+  volumes      BmaasVolume[]
+  networkPorts BmaasNetworkPort[]
+  usageRecords BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([openstackId])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@index([organizationId, status])
+  @@index([projectId, status])
+  @@map("bmaas_instances")
+}
+
+model BmaasFlavor {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  // Compute resources
+  vcpus     Int
+  ram       Int // MB
+  disk      Int // GB
+  swap      Int @default(0) // MB
+  ephemeral Int @default(0) // GB
+
+  // OpenStack mapping
+  openstackId String? @unique @map("openstack_id")
+
+  // Pricing
+  hourlyRate  Decimal @map("hourly_rate") @db.Decimal(10, 4)
+  monthlyRate Decimal @map("monthly_rate") @db.Decimal(10, 2)
+  currency    String  @default("USD")
+
+  // Specifications
+  bandwidth Int? // Mbps
+  isPublic  Boolean @default(true) @map("is_public")
+  isActive  Boolean @default(true) @map("is_active")
+
+  // Metadata
+  metadata Json     @default("{}")
+  tags     String[] @default([])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  instances BmaasInstance[]
+
+  @@index([isActive])
+  @@index([isPublic])
+  @@map("bmaas_flavors")
+}
+
+model BmaasNetwork {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  projectId      String @map("project_id")
+
+  // Network details
+  name        String
+  description String?
+
+  // OpenStack identifiers
+  openstackId String @unique @map("openstack_id") // Neutron network UUID
+
+  // Configuration
+  cidr            String?
+  gateway         String?
+  dnsNameservers  String[] @default([]) @map("dns_nameservers")
+  allocationPools Json?    @map("allocation_pools")
+
+  // Network type
+  networkType    String? @map("network_type") // flat, vlan, vxlan, gre
+  segmentationId Int?    @map("segmentation_id")
+
+  // Status
+  status     BmaasNetworkStatus @default(PENDING)
+  isPublic   Boolean            @default(false) @map("is_public")
+  isExternal Boolean            @default(false) @map("is_external")
+
+  // Billing
+  monthlyRate Decimal @default(0) @map("monthly_rate") @db.Decimal(10, 4)
+  currency    String  @default("USD")
+
+  // Metadata
+  metadata Json     @default("{}")
+  tags     String[] @default([])
+
+  createdBy String    @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User               @relation("BmaasNetworkCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  subnets      BmaasSubnet[]
+  ports        BmaasNetworkPort[]
+  usageRecords BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([openstackId])
+  @@index([createdBy])
+  @@index([deletedAt])
+  @@index([organizationId, status])
+  @@map("bmaas_networks")
+}
+
+model BmaasSubnet {
+  id        String @id @default(cuid())
+  networkId String @map("network_id")
+
+  name        String
+  description String?
+
+  // OpenStack identifiers
+  openstackId String @unique @map("openstack_id")
+
+  // Configuration
+  cidr            String
+  gateway         String?
+  ipVersion       Int      @default(4) @map("ip_version") // 4 or 6
+  enableDhcp      Boolean  @default(true) @map("enable_dhcp")
+  dnsNameservers  String[] @default([]) @map("dns_nameservers")
+  allocationPools Json     @default("[]") @map("allocation_pools")
+  hostRoutes      Json     @default("[]") @map("host_routes")
+
+  // Metadata
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  network BmaasNetwork @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([networkId])
+  @@index([openstackId])
+  @@map("bmaas_subnets")
+}
+
+model BmaasNetworkPort {
+  id         String @id @default(cuid())
+  instanceId String @map("instance_id")
+  networkId  String @map("network_id")
+
+  name String?
+
+  // OpenStack identifiers
+  openstackId String @unique @map("openstack_id")
+
+  // Configuration
+  macAddress     String   @map("mac_address")
+  fixedIps       Json     @default("[]") @map("fixed_ips") // Array of {ip_address, subnet_id}
+  securityGroups String[] @default([]) @map("security_groups")
+
+  // Status
+  status       String  @default("DOWN") // UP, DOWN
+  adminStateUp Boolean @default(true) @map("admin_state_up")
+
+  // Metadata
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  instance BmaasInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  network  BmaasNetwork  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId])
+  @@index([networkId])
+  @@index([openstackId])
+  @@map("bmaas_network_ports")
+}
+
+model BmaasVolume {
+  id             String  @id @default(cuid())
+  organizationId String  @map("organization_id")
+  projectId      String  @map("project_id")
+  instanceId     String? @map("instance_id") // Null if not attached
+
+  name        String
+  description String?
+
+  // OpenStack identifiers
+  openstackId String @unique @map("openstack_id") // Cinder volume UUID
+
+  // Configuration
+  sizeGb     Int     @map("size") // Renamed from size for consistency with code
+  volumeType String  @default("standard") @map("volume_type") // standard, ssd, nvme
+  bootable   Boolean @default(false)
+  encrypted  Boolean @default(false)
+
+  // Attachment details
+  attachedDevice String? @map("device") // Renamed from device for consistency with code
+  attachmentId   String? @unique @map("attachment_id")
+
+  // Status
+  status BmaasVolumeStatus @default(CREATING)
+
+  // Billing
+  monthlyRatePerGb Decimal @map("monthly_rate_per_gb") @db.Decimal(10, 4)
+  currency         String  @default("USD")
+
+  // Snapshot info
+  snapshotId  String? @map("snapshot_id")
+  sourceVolId String? @map("source_vol_id")
+
+  // Metadata
+  metadata Json     @default("{}")
+  tags     String[] @default([])
+
+  createdBy  String    @map("created_by")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+  attachedAt DateTime? @map("attached_at")
+  detachedAt DateTime? @map("detached_at")
+
+  // Relations
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User               @relation("BmaasVolumeCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  instance     BmaasInstance?     @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  usageRecords BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([instanceId])
+  @@index([status])
+  @@index([openstackId])
+  @@index([createdBy])
+  @@index([deletedAt])
+  @@index([organizationId, status])
+  @@map("bmaas_volumes")
+}
+
+model BmaasBucket {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  projectId      String @map("project_id")
+
+  name        String @unique // Bucket name (globally unique in Swift)
+  description String?
+
+  // OpenStack identifiers
+  openstackId String @unique @map("openstack_container") // Renamed from openstackContainer for consistency
+
+  // Configuration
+  region       String?
+  storageClass String  @default("standard") @map("storage_class") // standard, archive
+  isPublic     Boolean @default(false) @map("is_public")
+  versioning   Boolean @default(false)
+
+  // Capacity tracking
+  objectCount Int    @default(0) @map("object_count")
+  bytesUsed   BigInt @default(0) @map("bytes_used")
+  sizeBytes   BigInt @default(0) @map("size_bytes") // Alias for total bucket size
+
+  // Billing
+  storageRatePerGb  Decimal @map("storage_rate_per_gb") @db.Decimal(10, 4)
+  transferRatePerGb Decimal @map("transfer_rate_per_gb") @db.Decimal(10, 4)
+  requestRate       Decimal @default(0) @map("request_rate") @db.Decimal(10, 6)
+  currency          String  @default("USD")
+
+  // Status
+  status BmaasBucketStatus @default(ACTIVE)
+
+  // Access control
+  readAcl  Json? @map("read_acl")
+  writeAcl Json? @map("write_acl")
+
+  // Metadata
+  metadata Json     @default("{}")
+  tags     String[] @default([])
+
+  createdBy    String    @map("created_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+  lastSyncedAt DateTime? @map("last_synced_at")
+
+  // Relations
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator      User               @relation("BmaasBucketCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  usageRecords BmaasUsageRecord[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+  @@index([openstackId])
+  @@index([createdBy])
+  @@index([deletedAt])
+  @@index([organizationId, status])
+  @@map("bmaas_buckets")
+}
+
+model BmaasUsageRecord {
+  id             String @id @default(cuid())
+  organizationId String @map("organization_id")
+  projectId      String @map("project_id")
+
+  // Resource identification
+  resourceType BmaasResourceType @map("resource_type")
+  resourceId   String            @map("resource_id")
+  resourceName String            @map("resource_name") // Denormalized for historical records
+  instanceId   String?           @map("instance_id")
+  volumeId     String?           @map("volume_id")
+  networkId    String?           @map("network_id")
+  bucketId     String?           @map("bucket_id")
+
+  // Usage metrics
+  metric   String // compute_hours, storage_gb_hours, network_gb_out, requests
+  quantity Decimal @db.Decimal(20, 6)
+  unit     String // hours, GB, requests
+
+  // Pricing
+  unitPrice Decimal @map("unit_price") @db.Decimal(10, 6)
+  totalCost Decimal @map("total_cost") @db.Decimal(10, 4)
+  currency  String  @default("USD")
+
+  // Time window
+  startTime DateTime @map("start_time")
+  endTime   DateTime @map("end_time")
+
+  // Metadata
+  metadata Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  instance     BmaasInstance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  volume       BmaasVolume?   @relation(fields: [volumeId], references: [id], onDelete: SetNull)
+  network      BmaasNetwork?  @relation(fields: [networkId], references: [id], onDelete: SetNull)
+  bucket       BmaasBucket?   @relation(fields: [bucketId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([startTime])
+  @@index([endTime])
+  @@index([createdAt])
+  @@index([organizationId, startTime, endTime])
+  @@map("bmaas_usage_records")
+}
+
+model BmaasQuota {
+  id             String @id @default(cuid())
+  organizationId String @unique @map("organization_id")
+
+  // Compute quotas
+  maxInstances Int @default(10) @map("max_instances")
+  maxVcpus     Int @default(50) @map("max_vcpus")
+  maxRamMb     Int @default(131072) @map("max_ram_mb") // 128 GB
+
+  // Storage quotas
+  maxVolumes   Int @default(20) @map("max_volumes")
+  maxStorageGb Int @default(1000) @map("max_volume_gb") // Renamed from maxVolumeGb for consistency
+  maxSnapshots Int @default(50) @map("max_snapshots")
+  maxBuckets   Int @default(10) @map("max_buckets")
+  maxBucketGb  Int @default(5000) @map("max_bucket_gb")
+
+  // Network quotas
+  maxNetworks       Int @default(5) @map("max_networks")
+  maxSubnets        Int @default(10) @map("max_subnets")
+  maxPorts          Int @default(50) @map("max_ports")
+  maxFloatingIps    Int @default(5) @map("max_floating_ips")
+  maxSecurityGroups Int @default(10) @map("max_security_groups")
+
+  // Current usage (cached for performance)
+  usedInstances Int @default(0) @map("used_instances")
+  usedVcpus     Int @default(0) @map("used_vcpus")
+  usedRamMb     Int @default(0) @map("used_ram_mb")
+  usedVolumes   Int @default(0) @map("used_volumes")
+  usedStorageGb Int @default(0) @map("used_volume_gb") // Renamed from usedVolumeGb for consistency
+  usedNetworks  Int @default(0) @map("used_networks")
+  usedBuckets   Int @default(0) @map("used_buckets")
+
+  // Metadata
+  metadata Json @default("{}")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  lastSyncedAt DateTime @default(now()) @map("last_synced_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("bmaas_quotas")
+}
+
+enum BmaasInstanceStatus {
+  PENDING
+  BUILDING
+  ACTIVE
+  PAUSED
+  SUSPENDED
+  SHUTOFF
+  ERROR
+  DELETED
+
+  @@map("bmaas_instance_status")
+}
+
+enum BmaasNetworkStatus {
+  PENDING
+  ACTIVE
+  DOWN
+  ERROR
+  DELETED
+
+  @@map("bmaas_network_status")
+}
+
+enum BmaasVolumeStatus {
+  CREATING
+  AVAILABLE
+  ATTACHING
+  IN_USE
+  DETACHING
+  DELETING
+  ERROR
+  ERROR_DELETING
+  DELETED
+
+  @@map("bmaas_volume_status")
+}
+
+enum BmaasBucketStatus {
+  CREATING
+  ACTIVE
+  SUSPENDED
+  DELETING
+  DELETED
+  ERROR
+
+  @@map("bmaas_bucket_status")
+}
+
+enum BmaasResourceType {
+  INSTANCE
+  VOLUME
+  NETWORK
+  BUCKET
+  FLOATING_IP
+  SNAPSHOT
+
+  @@map("bmaas_resource_type")
+}
+

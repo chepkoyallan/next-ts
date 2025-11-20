@@ -92,7 +92,58 @@ const verify2FAHandler = createSingleMethodHandler(
         secret = (user as any).twoFactorSecret;
       }
 
-      // Verify the TOTP code
+      // Verify the TOTP code or backup code using helper
+      if (!isSetup) {
+        // For regular verification (not setup), use the helper which checks both TOTP and backup codes
+        const verificationResult = await (UserService as any).verify2FACode(user.id, code, speakeasy);
+
+        if (!verificationResult.valid) {
+          return createErrorResponse(
+            'UNAUTHORIZED',
+            {
+              message: 'Invalid 2FA code',
+              field: 'code',
+            },
+            context.requestId
+          );
+        }
+
+        if (verificationResult.usedBackupCode) {
+          logger.info('2FA backup code used', {
+            userId: user.id,
+            email: user.email,
+            requestId: context.requestId,
+          });
+
+          return createSuccessResponse(
+            {
+              verified: true,
+              backupCodeUsed: true,
+              message: 'Backup code verified successfully',
+            },
+            200,
+            context.requestId
+          );
+        }
+
+        // TOTP verification successful
+        logger.info('2FA verification successful', {
+          userId: user.id,
+          email: user.email,
+          requestId: context.requestId,
+        });
+
+        return createSuccessResponse(
+          {
+            verified: true,
+            message: '2FA verification successful',
+          },
+          200,
+          context.requestId
+        );
+      }
+
+      // For setup verification, only check TOTP
       const verified = speakeasy.totp.verify({
         secret,
         encoding: 'base32',
@@ -101,58 +152,6 @@ const verify2FAHandler = createSingleMethodHandler(
       });
 
       if (!verified) {
-        // Check if it's a backup code (only for non-setup verification)
-        if (!isSetup && (user as any).twoFactorBackupCodes) {
-          const hashedBackupCodes = JSON.parse((user as any).twoFactorBackupCodes);
-
-          // ✅ SECURITY: Hash input code and compare with timing-safe comparison
-          const inputHash = hashBackupCode(code.toUpperCase().replace(/\s/g, ''), user.id);
-
-          let matchIndex = -1;
-          for (let i = 0; i < hashedBackupCodes.length; i += 1) {
-            try {
-              if (
-                timingSafeEqual(
-                  Buffer.from(hashedBackupCodes[i], 'utf8'),
-                  Buffer.from(inputHash, 'utf8')
-                )
-              ) {
-                matchIndex = i;
-                break;
-              }
-            } catch {
-              // Length mismatch, continue to next iteration
-            }
-          }
-
-          if (matchIndex !== -1) {
-            // Remove used backup code
-            hashedBackupCodes.splice(matchIndex, 1);
-            await (UserService as any).updateTwoFactorBackupCodes(
-              user.id,
-              JSON.stringify(hashedBackupCodes)
-            );
-
-            logger.info('2FA backup code used', {
-              userId: user.id,
-              email: user.email,
-              remainingBackupCodes: hashedBackupCodes.length,
-              requestId: context.requestId,
-            });
-
-            return createSuccessResponse(
-              {
-                verified: true,
-                backupCodeUsed: true,
-                remainingBackupCodes: hashedBackupCodes.length,
-                message: 'Backup code verified successfully',
-              },
-              200,
-              context.requestId
-            );
-          }
-        }
-
         return createErrorResponse(
           'UNAUTHORIZED',
           {
@@ -167,15 +166,11 @@ const verify2FAHandler = createSingleMethodHandler(
         // Complete 2FA setup
         const backupCodes = generateBackupCodes(); // Plain text for user display
 
-        // ✅ SECURITY: Hash backup codes before storage
-        const hashedBackupCodes = backupCodes.map((backupCode) =>
-          hashBackupCode(backupCode, user.id)
-        );
-
+        // ✅ SECURITY: enableTwoFactor now handles backup code storage in normalized table
         await (UserService as any).enableTwoFactor(
           user.id,
           secret,
-          JSON.stringify(hashedBackupCodes)
+          backupCodes // Pass plain codes, helper will store them securely
         );
         await (UserService as any).clearTempTwoFactorSecret(user.id);
 
@@ -197,13 +192,8 @@ const verify2FAHandler = createSingleMethodHandler(
           context.requestId
         );
       }
-      // Regular 2FA verification successful
-      logger.info('2FA verification successful', {
-        userId: user.id,
-        email: user.email,
-        requestId: context.requestId,
-      });
 
+      // Should not reach here (covered by above cases)
       return createSuccessResponse(
         {
           verified: true,

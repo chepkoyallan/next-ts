@@ -1,0 +1,75 @@
+// Metrics, alerts, and system monitoring
+// ============================================================================
+
+model Metric {
+  id          String     @id @default(cuid())
+  name        String
+  type        MetricType
+  value       Decimal    @db.Decimal(15, 6)
+  timestamp   DateTime
+  labels      Json       @default("{}")
+  projectId   String     @map("project_id")
+  executionId String?    @map("execution_id")
+
+  // Relations
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("metrics")
+}
+
+model AlertRule {
+  id            String        @id @default(cuid())
+  name          String
+  query         String
+  condition     Json
+  severity      AlertSeverity
+  duration      Int // seconds
+  cooldown      Int           @default(300) // seconds
+  enabled       Boolean       @default(true)
+  notifications Json          @default("[]")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  alerts Alert[]
+
+  @@map("alert_rules")
+}
+
+model Alert {
+  id          String        @id @default(cuid())
+  ruleId      String        @map("rule_id")
+  name        String
+  description String?
+  severity    AlertSeverity
+  status      AlertStatus   @default(FIRING)
+  projectId   String        @map("project_id")
+  executionId String?       @map("execution_id")
+  triggeredAt DateTime      @default(now()) @map("triggered_at")
+  resolvedAt  DateTime?     @map("resolved_at")
+  metadata    Json          @default("{}")
+
+  // Relations
+  rule    AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+enum MetricType {
+  COUNTER
+  GAUGE
+  HISTOGRAM
+  SUMMARY
+
+  @@map("metric_type")
+}
+
+enum AlertStatus {
+  FIRING
+  RESOLVED
+  SILENCED
+
+  @@map("alert_status")
+}
+
